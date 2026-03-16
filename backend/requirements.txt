@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pdfplumber
+google-generativeai
+linkedin-api
+PyGithub
+python-jobspy
+python-dotenv
+beautifulsoup4
+requests
+pydantic
+python-multipart
+aiofiles
