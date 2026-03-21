@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import asyncio
 import hashlib
 import warnings
 from datetime import datetime
@@ -96,7 +97,7 @@ async def generate_with_retry(
         except Exception as e:
             print(f"[Gemini] Attempt {i + 1} failed: {e}")
             if "429" in str(e) or "quota" in str(e).lower() or "RESOURCE_EXHAUSTED" in str(e):
-                time.sleep(2 ** (i + 1))
+                await asyncio.sleep(2 ** (i + 1))
                 continue
             raise e
     raise Exception("[Gemini] Max retries exceeded")
@@ -231,7 +232,7 @@ Return STRICT JSON matching the schema."""
                 schema=GithubDeepAnalysisResult,
             )
             results.append(raw)
-            time.sleep(1)  # rate-limit courtesy
+            await asyncio.sleep(1)  # rate-limit courtesy
         except Exception as e:
             print(f"[GitHub Analysis] Error on {data.get('repo_name')}: {e}")
 

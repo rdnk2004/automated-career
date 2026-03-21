@@ -52,10 +52,6 @@ class OutreachAgent:
 
         # Step 2: Score each profile
         for hr_profile in raw_profiles:
-            if iteration >= self.MAX_ITERATIONS:
-                break
-            iteration += 1
-
             try:
                 # Simple heuristic scoring (no extra Gemini call to conserve tokens)
                 score = _heuristic_score(hr_profile, role)

@@ -1,6 +1,7 @@
 import os
 import json
 import hashlib
+import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -9,9 +10,17 @@ from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("CareerLensAPI")
 
 from database import (
     init_db, get_db,
@@ -49,6 +58,15 @@ from services import jobs_service as jobs
 
 
 # ── App Lifecycle ─────────────────────────────────────────────────────────────
+def get_latest_profile_snapshot(db: Session, source: ProfileSource):
+    from sqlalchemy import desc
+    return (
+        db.query(ProfileSnapshot)
+        .filter(ProfileSnapshot.source == source)
+        .order_by(desc(ProfileSnapshot.scraped_at))
+        .first()
+    )
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -61,7 +79,7 @@ app = FastAPI(title="CareerLens API", version="1.0.0", lifespan=lifespan)
 # ── CORS (ported from CareerCompass AI reference) ─────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,9 +93,10 @@ app.add_middleware(
 @app.get("/api/health")
 def health_check(db: Session = Depends(get_db)):
     try:
-        db.execute(__import__("sqlalchemy").text("SELECT 1"))
+        db.execute(text("SELECT 1"))
         db_status = "connected"
-    except Exception:
+    except Exception as e:
+        logger.error("Database health check failed", exc_info=True)
         db_status = "error"
     return {"status": "ok", "db": db_status, "version": "1.0.0"}
 
@@ -138,8 +157,8 @@ async def analyze_resume(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[/api/resume/analyze] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"[/api/resume/analyze] Error analyzing resume: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
 
 @app.post("/api/resume/bullets")
@@ -308,13 +327,7 @@ async def analyze_linkedin(
 ):
     """Analyze the cached LinkedIn profile against an optional JD."""
     try:
-        from sqlalchemy import desc
-        last_snapshot = (
-            db.query(ProfileSnapshot)
-            .filter(ProfileSnapshot.source == ProfileSource.linkedin)
-            .order_by(desc(ProfileSnapshot.scraped_at))
-            .first()
-        )
+        last_snapshot = get_latest_profile_snapshot(db, ProfileSource.linkedin)
         if not last_snapshot:
             raise HTTPException(status_code=404, detail="No LinkedIn profile scraped yet. Run /api/linkedin/scrape first.")
 
@@ -493,12 +506,7 @@ async def trigger_job_scrape(db: Session = Depends(get_db)):
 
         # Optionally match against profile
         linkedin_snapshot = None
-        last_linkedin = (
-            db.query(ProfileSnapshot)
-            .filter(ProfileSnapshot.source == ProfileSource.linkedin)
-            .order_by(ProfileSnapshot.scraped_at.desc())
-            .first()
-        )
+        last_linkedin = get_latest_profile_snapshot(db, ProfileSource.linkedin)
         profile_summary = ""
         if last_linkedin:
             profile_data = json.loads(last_linkedin.data_json)
@@ -557,12 +565,7 @@ async def tailor_job(job_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="Job not found.")
 
         # Get profile context
-        last_linkedin = (
-            db.query(ProfileSnapshot)
-            .filter(ProfileSnapshot.source == ProfileSource.linkedin)
-            .order_by(ProfileSnapshot.scraped_at.desc())
-            .first()
-        )
+        last_linkedin = get_latest_profile_snapshot(db, ProfileSource.linkedin)
         profile_summary = ""
         if last_linkedin:
             profile_data = json.loads(last_linkedin.data_json)
@@ -635,15 +638,8 @@ def get_sync_suggestions(db: Session = Depends(get_db)):
 async def generate_sync_suggestions(db: Session = Depends(get_db)):
     """Analyze profile state and generate new cross-channel sync suggestions."""
     try:
-        from sqlalchemy import desc
-
-        linkedin_snap = db.query(ProfileSnapshot).filter(
-            ProfileSnapshot.source == ProfileSource.linkedin
-        ).order_by(desc(ProfileSnapshot.scraped_at)).first()
-
-        resume_snap = db.query(ProfileSnapshot).filter(
-            ProfileSnapshot.source == ProfileSource.resume
-        ).order_by(desc(ProfileSnapshot.scraped_at)).first()
+        linkedin_snap = get_latest_profile_snapshot(db, ProfileSource.linkedin)
+        resume_snap = get_latest_profile_snapshot(db, ProfileSource.resume)
 
         li_data = json.loads(linkedin_snap.data_json) if linkedin_snap else {}
         res_data = json.loads(resume_snap.data_json) if resume_snap else {}
@@ -691,13 +687,8 @@ async def get_dashboard(db: Session = Depends(get_db)):
         from sqlalchemy import func, desc
 
         # Health score inputs
-        linkedin_snap = db.query(ProfileSnapshot).filter(
-            ProfileSnapshot.source == ProfileSource.linkedin
-        ).order_by(desc(ProfileSnapshot.scraped_at)).first()
-
-        resume_snap = db.query(ProfileSnapshot).filter(
-            ProfileSnapshot.source == ProfileSource.resume
-        ).order_by(desc(ProfileSnapshot.scraped_at)).first()
+        linkedin_snap = get_latest_profile_snapshot(db, ProfileSource.linkedin)
+        resume_snap = get_latest_profile_snapshot(db, ProfileSource.resume)
 
         repos = github.fetch_all_repos()
 
@@ -771,10 +762,10 @@ ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 
 def mask(value: str) -> str:
-    """Mask a secret value for display."""
-    if not value or len(value) < 8:
-        return "****"
-    return value[:4] + "..." + value[-4:]
+    """Mask a secret value completely. Returning partial secrets is a security risk."""
+    if not value:
+        return ""
+    return "********"
 
 
 @app.get("/api/settings")
@@ -794,16 +785,9 @@ def update_settings(update: SettingsUpdate):
     """
     Write updated values to .env file and reload environment.
     Only fields provided (not None) are updated.
+    Preserves existing comments and unrelated variables.
     """
     try:
-        # Read existing .env lines
-        env_lines: dict = {}
-        if ENV_PATH.exists():
-            for line in ENV_PATH.read_text().splitlines():
-                if "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1)
-                    env_lines[k.strip()] = v.strip()
-
         update_map = {
             "GEMINI_API_KEY": update.gemini_api_key,
             "GEMINI_MODEL": update.gemini_model,
@@ -811,16 +795,40 @@ def update_settings(update: SettingsUpdate):
             "LINKEDIN_USERNAME": update.linkedin_username,
             "LINKEDIN_PASSWORD": update.linkedin_password,
         }
-        for key, val in update_map.items():
-            if val is not None:
-                env_lines[key] = val
-                os.environ[key] = val
+        
+        # Filter only provided values
+        updates = {k: v for k, v in update_map.items() if v is not None}
+        
+        lines = []
+        if ENV_PATH.exists():
+            lines = ENV_PATH.read_text().splitlines()
 
-        # Write back
-        content = "\n".join(f"{k}={v}" for k, v in env_lines.items()) + "\n"
+        new_lines = []
+        updated_keys = set()
+
+        for line in lines:
+            if "=" in line and not line.strip().startswith("#"):
+                k, _ = line.split("=", 1)
+                k = k.strip()
+                if k in updates:
+                    new_lines.append(f"{k}={updates[k]}")
+                    updated_keys.add(k)
+                    os.environ[k] = updates[k]
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+
+        # Append any new keys that weren't in the file
+        for k, v in updates.items():
+            if k not in updated_keys:
+                new_lines.append(f"{k}={v}")
+                os.environ[k] = v
+
+        content = "\n".join(new_lines) + "\n"
         ENV_PATH.write_text(content)
 
-        return {"status": "ok", "updated": [k for k, v in update_map.items() if v is not None]}
+        return {"status": "ok", "updated": list(updates.keys())}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
