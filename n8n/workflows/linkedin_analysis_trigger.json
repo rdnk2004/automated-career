@@ -1,0 +1,78 @@
+{
+  "name": "LinkedIn Analysis Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "linkedin-imported",
+        "httpMethod": "POST",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/settings",
+        "method": "GET"
+      },
+      "name": "Get Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/analysis/linkedin",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({target_role: $json.target_roles[0]})}}"
+      },
+      "name": "Analyze LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/analysis/synthesis",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({target_role: $('Get Settings').first().json.target_roles[0]})}}"
+      },
+      "name": "Synthesize Career Score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {},
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "content": "={{$json.error.message}}"
+      },
+      "name": "Log Error",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [450, 500]
+    }
+  ],
+  "connections": {
+    "Webhook": {"main": [[{"node": "Get Settings", "type": "main", "index": 0}]]},
+    "Get Settings": {"main": [[{"node": "Analyze LinkedIn", "type": "main", "index": 0}]]},
+    "Analyze LinkedIn": {"main": [[{"node": "Synthesize Career Score", "type": "main", "index": 0}]]},
+    "Error Trigger": {"main": [[{"node": "Log Error", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "errorWorkflow": "LinkedIn Analysis Trigger",
+    "saveExecutionProgress": true
+  }
+}

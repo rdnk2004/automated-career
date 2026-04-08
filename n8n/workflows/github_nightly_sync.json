@@ -1,0 +1,111 @@
+{
+  "name": "GitHub Nightly Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "0 2 * * *"}]
+        }
+      },
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/github/sync",
+        "method": "POST"
+      },
+      "name": "Trigger Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "name": "Wait 30s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/github/repos?health=all",
+        "method": "GET"
+      },
+      "name": "Get Repos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.has_readme}}",
+              "value2": false
+            }
+          ],
+          "number": [
+            {
+              "value1": "={{$json.latest_scan?.health_score || 0}}",
+              "operation": "smaller",
+              "value2": 50
+            }
+          ]
+        },
+        "combineOperation": "any"
+      },
+      "name": "Filter Unhealthy",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/github/scan",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({repo_full_name: $json.full_name})}}"
+      },
+      "name": "Scan Repo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1300, 280]
+    },
+    {
+      "parameters": {},
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "content": "={{$json.error.message}}"
+      },
+      "name": "Log Error",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [450, 500]
+    }
+  ],
+  "connections": {
+    "Cron": {"main": [[{"node": "Trigger Sync", "type": "main", "index": 0}]]},
+    "Trigger Sync": {"main": [[{"node": "Wait 30s", "type": "main", "index": 0}]]},
+    "Wait 30s": {"main": [[{"node": "Get Repos", "type": "main", "index": 0}]]},
+    "Get Repos": {"main": [[{"node": "Filter Unhealthy", "type": "main", "index": 0}]]},
+    "Filter Unhealthy": {"main": [[{"node": "Scan Repo", "type": "main", "index": 0}]]},
+    "Error Trigger": {"main": [[{"node": "Log Error", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "errorWorkflow": "GitHub Nightly Sync",
+    "saveExecutionProgress": true
+  }
+}
