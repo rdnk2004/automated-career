@@ -4,67 +4,108 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{"field": "cronExpression", "expression": "0 2 * * *"}]
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
         }
       },
-      "name": "Cron",
-      "type": "n8n-nodes-base.cron",
-      "typeVersion": 1,
-      "position": [250, 300]
+      "id": "node-schedule-trigger",
+      "name": "Every Night at 2AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
     },
     {
       "parameters": {
         "url": "http://backend:8000/api/github/sync",
-        "method": "POST"
+        "method": "POST",
+        "options": {
+          "timeout": 30000
+        }
       },
-      "name": "Trigger Sync",
+      "id": "node-trigger-sync",
+      "name": "Trigger GitHub Sync",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [450, 300]
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "amount": 30,
+        "amount": 45,
         "unit": "seconds"
       },
-      "name": "Wait 30s",
+      "id": "node-wait",
+      "name": "Wait for Sync (45s)",
       "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
-      "position": [650, 300]
+      "typeVersion": 1.1,
+      "position": [680, 300],
+      "webhookId": "wait-node-github-sync"
     },
     {
       "parameters": {
         "url": "http://backend:8000/api/github/repos?health=all",
-        "method": "GET"
+        "options": {
+          "timeout": 20000
+        }
       },
-      "name": "Get Repos",
+      "id": "node-get-repos",
+      "name": "Fetch All Repos",
       "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "",
+        "options": {}
+      },
+      "id": "node-split-repos",
+      "name": "Split into Repos",
+      "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [850, 300]
+      "position": [1120, 300]
     },
     {
       "parameters": {
         "conditions": {
-          "boolean": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
             {
-              "value1": "={{$json.has_readme}}",
-              "value2": false
+              "id": "cond-no-readme",
+              "leftValue": "={{ $json.has_readme }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-low-health",
+              "leftValue": "={{ $json.latest_scan?.health_score ?? 100 }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "smallerEqual"
+              }
             }
           ],
-          "number": [
-            {
-              "value1": "={{$json.latest_scan?.health_score || 0}}",
-              "operation": "smaller",
-              "value2": 50
-            }
-          ]
-        },
-        "combineOperation": "any"
+          "combinator": "or"
+        }
       },
-      "name": "Filter Unhealthy",
+      "id": "node-filter-unhealthy",
+      "name": "Filter Unhealthy Repos",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [1050, 300]
+      "typeVersion": 2,
+      "position": [1340, 300]
     },
     {
       "parameters": {
@@ -72,40 +113,219 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{JSON.stringify({repo_full_name: $json.full_name})}}"
+        "jsonBody": "={{ JSON.stringify({ repo_full_name: $json.full_name }) }}",
+        "options": {
+          "timeout": 60000
+        }
       },
-      "name": "Scan Repo",
+      "id": "node-scan-repo",
+      "name": "Run Security Scan",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [1300, 280]
-    },
-    {
-      "parameters": {},
-      "name": "Error Trigger",
-      "type": "n8n-nodes-base.errorTrigger",
-      "typeVersion": 1,
-      "position": [250, 500]
+      "typeVersion": 4.2,
+      "position": [1560, 220],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "content": "={{$json.error.message}}"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-secrets",
+              "leftValue": "={{ $json.leaked_secrets?.length ?? 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
       },
-      "name": "Log Error",
-      "type": "n8n-nodes-base.noOp",
+      "id": "node-check-secrets",
+      "name": "Found Leaked Secrets?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1780, 220]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "alert_type",
+              "value": "SECURITY_ALERT"
+            },
+            {
+              "name": "message",
+              "value": "=🚨 SECURITY: Leaked secrets found in {{ $('Fetch All Repos').item.json.full_name }}! Secrets: {{ JSON.stringify($json.leaked_secrets) }}"
+            },
+            {
+              "name": "repo",
+              "value": "={{ $('Fetch All Repos').item.json.full_name }}"
+            },
+            {
+              "name": "health_score",
+              "value": "={{ $json.health_score }}"
+            }
+          ]
+        }
+      },
+      "id": "node-security-alert",
+      "name": "Flag Security Alert",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2000, 160]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "scan_ok"
+            },
+            {
+              "name": "repo",
+              "value": "={{ $('Fetch All Repos').item.json.full_name }}"
+            },
+            {
+              "name": "health_score",
+              "value": "={{ $json.health_score }}"
+            }
+          ]
+        }
+      },
+      "id": "node-scan-ok",
+      "name": "Scan Passed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "repo_healthy"
+            },
+            {
+              "name": "repo",
+              "value": "={{ $json.full_name }}"
+            }
+          ]
+        }
+      },
+      "id": "node-healthy-log",
+      "name": "Repo is Healthy",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 420]
+    },
+    {
+      "parameters": {},
+      "id": "node-error-trigger",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [450, 500]
+      "position": [240, 560]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "error_workflow",
+              "value": "GitHub Nightly Sync"
+            },
+            {
+              "name": "error_message",
+              "value": "={{ $json.execution.error.message }}"
+            },
+            {
+              "name": "error_node",
+              "value": "={{ $json.execution.lastNodeExecuted }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "node-log-error",
+      "name": "Log Error Details",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 560]
     }
   ],
   "connections": {
-    "Cron": {"main": [[{"node": "Trigger Sync", "type": "main", "index": 0}]]},
-    "Trigger Sync": {"main": [[{"node": "Wait 30s", "type": "main", "index": 0}]]},
-    "Wait 30s": {"main": [[{"node": "Get Repos", "type": "main", "index": 0}]]},
-    "Get Repos": {"main": [[{"node": "Filter Unhealthy", "type": "main", "index": 0}]]},
-    "Filter Unhealthy": {"main": [[{"node": "Scan Repo", "type": "main", "index": 0}]]},
-    "Error Trigger": {"main": [[{"node": "Log Error", "type": "main", "index": 0}]]}
+    "Every Night at 2AM": {
+      "main": [
+        [{ "node": "Trigger GitHub Sync", "type": "main", "index": 0 }]
+      ]
+    },
+    "Trigger GitHub Sync": {
+      "main": [
+        [{ "node": "Wait for Sync (45s)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait for Sync (45s)": {
+      "main": [
+        [{ "node": "Fetch All Repos", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch All Repos": {
+      "main": [
+        [{ "node": "Split into Repos", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split into Repos": {
+      "main": [
+        [{ "node": "Filter Unhealthy Repos", "type": "main", "index": 0 }]
+      ]
+    },
+    "Filter Unhealthy Repos": {
+      "main": [
+        [{ "node": "Run Security Scan", "type": "main", "index": 0 }],
+        [{ "node": "Repo is Healthy", "type": "main", "index": 0 }]
+      ]
+    },
+    "Run Security Scan": {
+      "main": [
+        [{ "node": "Found Leaked Secrets?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Found Leaked Secrets?": {
+      "main": [
+        [{ "node": "Flag Security Alert", "type": "main", "index": 0 }],
+        [{ "node": "Scan Passed", "type": "main", "index": 0 }]
+      ]
+    },
+    "On Workflow Error": {
+      "main": [
+        [{ "node": "Log Error Details", "type": "main", "index": 0 }]
+      ]
+    }
   },
   "settings": {
-    "errorWorkflow": "GitHub Nightly Sync",
-    "saveExecutionProgress": true
-  }
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveExecutionProgress": true,
+    "timezone": "Asia/Kolkata"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "career-os-local"
+  },
+  "tags": ["career-os", "github", "scheduled", "security"]
 }
