@@ -1,5 +1,5 @@
 import { api } from './api';
-import { GithubRepo, RepoScan, ReadmeGenerateResponse, ReadmePushResponse } from '../types/github';
+import { GithubRepo, RepoScan } from '../types/github';
 
 export const githubApi = {
   getRepos: async (health?: string): Promise<GithubRepo[]> => {
@@ -15,12 +15,12 @@ export const githubApi = {
     const res = await api.post('/api/github/scan', { repo_full_name: repoFullName });
     return res.data;
   },
-  generateReadme: async (repoFullName: string): Promise<ReadmeGenerateResponse> => {
-    const res = await api.post('/api/github/readme/generate', { repo_full_name: repoFullName });
+  scanAllRepos: async (): Promise<{ status: string, message: string }> => {
+    const res = await api.post('/api/github/scan/all');
     return res.data;
   },
-  pushReadme: async (repoFullName: string, content: string): Promise<ReadmePushResponse> => {
-    const res = await api.post('/api/github/readme/push', { repo_full_name: repoFullName, content });
+  scanBatchRepos: async (repoFullNames: string[]): Promise<{ status: string, message: string }> => {
+    const res = await api.post('/api/github/scan/batch', { repo_full_names: repoFullNames });
     return res.data;
   }
 };

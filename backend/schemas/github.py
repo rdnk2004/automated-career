@@ -33,17 +33,8 @@ class GithubRepoResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-class ReadmeGenerateRequest(BaseModel):
+class RepoScanRequest(BaseModel):
     repo_full_name: str
 
-class ReadmeGenerateResponse(BaseModel):
-    readme_markdown: str
-    suggestion_id: UUID
-
-class ReadmePushRequest(BaseModel):
-    repo_full_name: str
-    content: str
-
-class ReadmePushResponse(BaseModel):
-    committed: bool
-    sha: str
+class BatchScanRequest(BaseModel):
+    repo_full_names: List[str]

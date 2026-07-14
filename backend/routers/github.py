@@ -11,11 +11,9 @@ from models.github import GithubRepo, RepoScan
 from models.suggestions import SuggestionLog
 from schemas.github import (
     GithubRepoResponse, RepoScanResponse,
-    ReadmeGenerateRequest, ReadmeGenerateResponse,
-    ReadmePushRequest, ReadmePushResponse,
+    RepoScanRequest, BatchScanRequest,
 )
 from services.github_service import github_service
-from agents.github_agent import generate_readme as agent_generate_readme
 
 logger = logging.getLogger("career_os")
 router = APIRouter()
@@ -47,6 +45,39 @@ async def sync_repos_task():
             logger.info(f"Synced {len(repos)} repos from GitHub")
         except Exception as e:
             logger.error(f"sync_repos_task failed: {e}")
+            await db.rollback()
+
+
+async def scan_all_repos_task():
+    """Scan all repos sequentially. Creates its own DB session."""
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await db.execute(select(GithubRepo))
+            repos = result.scalars().all()
+            logger.info(f"Starting background scan for all {len(repos)} repositories")
+            for repo in repos:
+                try:
+                    logger.info(f"Scanning repository: {repo.full_name}")
+                    scan_data = await github_service.scan_for_secrets(repo.full_name)
+                    scan = RepoScan(
+                        repo_id=repo.id,
+                        has_gitignore=scan_data.get('has_gitignore', False),
+                        has_env_file=scan_data.get('has_env_file', False),
+                        leaked_secrets=scan_data.get('leaked_secrets', []),
+                        ai_issues=scan_data.get('ai_issues', []),
+                    )
+                    repo.has_readme = scan_data.get('has_readme', False)
+                    health_score = github_service.calculate_health_score(repo, scan)
+                    scan.health_score = health_score
+                    db.add(scan)
+                    await db.commit()
+                    logger.info(f"Successfully scanned {repo.full_name}. Health score: {health_score}")
+                except Exception as repo_err:
+                    logger.error(f"Failed to scan repository {repo.full_name}: {repo_err}")
+                    await db.rollback()
+            logger.info("Finished background scan for all repositories")
+        except Exception as e:
+            logger.error(f"scan_all_repos_task failed: {e}")
             await db.rollback()
 
 
@@ -115,53 +146,8 @@ async def sync_repos(background_tasks: BackgroundTasks):
     return {"task_id": "sync_task", "status": "queued"}
 
 
-@router.post("/readme/generate", response_model=ReadmeGenerateResponse)
-async def generate_readme(req: ReadmeGenerateRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(GithubRepo).where(GithubRepo.full_name == req.repo_full_name)
-    )
-    repo = result.scalars().first()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repo not found")
-
-    tree = await github_service.get_repo_file_tree(req.repo_full_name)
-    sample_code = ""  # ideally fetch a sample file
-
-    repo_data = {
-        'name': repo.name,
-        'description': repo.description,
-        'language': repo.language,
-        'topics': repo.topics,
-    }
-
-    readme_markdown = await agent_generate_readme(repo_data, json.dumps(tree), sample_code)
-
-    # Save to suggestions_log
-    log = SuggestionLog(
-        suggestion_type="github_readme",
-        context={"repo_full_name": req.repo_full_name},
-        suggestion=readme_markdown,
-    )
-    db.add(log)
-    await db.commit()
-    await db.refresh(log)
-
-    return ReadmeGenerateResponse(readme_markdown=readme_markdown, suggestion_id=log.id)
-
-
-@router.post("/readme/push", response_model=ReadmePushResponse)
-async def push_readme(req: ReadmePushRequest):
-    try:
-        resp = await github_service.push_file(
-            req.repo_full_name, "README.md", req.content, "Add AI generated README"
-        )
-        return ReadmePushResponse(committed=True, sha=resp.get("content", {}).get("sha", ""))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/scan", response_model=RepoScanResponse)
-async def scan_repo(req: ReadmeGenerateRequest, db: AsyncSession = Depends(get_db)):
+async def scan_repo(req: RepoScanRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(GithubRepo).where(GithubRepo.full_name == req.repo_full_name)
     )
@@ -178,6 +164,7 @@ async def scan_repo(req: ReadmeGenerateRequest, db: AsyncSession = Depends(get_d
         leaked_secrets=scan_data.get('leaked_secrets', []),
         ai_issues=scan_data.get('ai_issues', []),
     )
+    repo.has_readme = scan_data.get('has_readme', False)
 
     # C-6 fix: calculate_health_score is now sync, no await needed
     health_score = github_service.calculate_health_score(repo, scan)
@@ -188,3 +175,52 @@ async def scan_repo(req: ReadmeGenerateRequest, db: AsyncSession = Depends(get_d
     await db.refresh(scan)
 
     return scan
+
+
+@router.post("/scan/all")
+async def scan_all_repos(background_tasks: BackgroundTasks):
+    """Trigger background scan of all repositories in the database."""
+    background_tasks.add_task(scan_all_repos_task)
+    return {"status": "queued", "message": "Background scan of all repositories started."}
+
+
+async def scan_batch_repos_task(repo_full_names: List[str]):
+    """Scan a specific batch of repos sequentially. Creates its own DB session."""
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await db.execute(
+                select(GithubRepo).where(GithubRepo.full_name.in_(repo_full_names))
+            )
+            repos = result.scalars().all()
+            logger.info(f"Starting background scan for batch of {len(repos)} repositories")
+            for repo in repos:
+                try:
+                    logger.info(f"Scanning repository: {repo.full_name}")
+                    scan_data = await github_service.scan_for_secrets(repo.full_name)
+                    scan = RepoScan(
+                        repo_id=repo.id,
+                        has_gitignore=scan_data.get('has_gitignore', False),
+                        has_env_file=scan_data.get('has_env_file', False),
+                        leaked_secrets=scan_data.get('leaked_secrets', []),
+                        ai_issues=scan_data.get('ai_issues', []),
+                    )
+                    repo.has_readme = scan_data.get('has_readme', False)
+                    health_score = github_service.calculate_health_score(repo, scan)
+                    scan.health_score = health_score
+                    db.add(scan)
+                    await db.commit()
+                    logger.info(f"Successfully scanned {repo.full_name}. Health score: {health_score}")
+                except Exception as repo_err:
+                    logger.error(f"Failed to scan repository {repo.full_name}: {repo_err}")
+                    await db.rollback()
+            logger.info("Finished background scan for batch of repositories")
+        except Exception as e:
+            logger.error(f"scan_batch_repos_task failed: {e}")
+            await db.rollback()
+
+
+@router.post("/scan/batch")
+async def scan_batch_repos(req: BatchScanRequest, background_tasks: BackgroundTasks):
+    """Trigger background scan of a batch of repositories in the database."""
+    background_tasks.add_task(scan_batch_repos_task, req.repo_full_names)
+    return {"status": "queued", "message": f"Background scan of {len(req.repo_full_names)} repositories started."}

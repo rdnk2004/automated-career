@@ -1,22 +1,63 @@
 import { useState } from 'react';
-import { useRepos, useSyncRepos, useScanRepo } from '@/hooks/useGithubRepos';
+import { useRepos, useSyncRepos, useScanRepo, useScanBatchRepos } from '@/hooks/useGithubRepos';
 import { RepoHealthTable } from '@/components/github/RepoHealthTable';
 import { SecurityScanPanel } from '@/components/github/SecurityScanPanel';
-import { ReadmeGenerator } from '@/components/github/ReadmeGenerator';
 import { Button } from '@/components/ui/button';
 import { GithubRepo } from '@/types/github';
 
 export default function GitHub() {
   const [filter, setFilter] = useState<string>('all');
   const [selectedRepo, setSelectedRepo] = useState<GithubRepo | null>(null);
+  const [selectedRepoFullNames, setSelectedRepoFullNames] = useState<Set<string>>(new Set());
   
   const { data: repos, isLoading } = useRepos(filter !== 'all' ? filter : undefined);
   const { mutate: syncRepos, isPending: isSyncing } = useSyncRepos();
   const { mutate: scanRepo, isPending: isScanning } = useScanRepo();
+  const { mutate: scanBatchRepos, isPending: isScanningBatch } = useScanBatchRepos();
 
   const handleScan = () => {
     if (selectedRepo) {
       scanRepo(selectedRepo.full_name);
+    }
+  };
+
+  const handleToggleSelect = (fullName: string) => {
+    setSelectedRepoFullNames(prev => {
+      const next = new Set(prev);
+      if (next.has(fullName)) {
+        next.delete(fullName);
+      } else {
+        next.add(fullName);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (!repos) return;
+    const allSelected = repos.length > 0 && repos.every(repo => selectedRepoFullNames.has(repo.full_name));
+    if (allSelected) {
+      setSelectedRepoFullNames(prev => {
+        const next = new Set(prev);
+        repos.forEach(repo => next.delete(repo.full_name));
+        return next;
+      });
+    } else {
+      setSelectedRepoFullNames(prev => {
+        const next = new Set(prev);
+        repos.forEach(repo => next.add(repo.full_name));
+        return next;
+      });
+    }
+  };
+
+  const handleScanSelected = () => {
+    if (selectedRepoFullNames.size > 0) {
+      scanBatchRepos(Array.from(selectedRepoFullNames), {
+        onSuccess: () => {
+          setSelectedRepoFullNames(new Set());
+        }
+      });
     }
   };
 
@@ -25,9 +66,18 @@ export default function GitHub() {
       <div className="w-1/2 p-6 overflow-y-auto border-r flex flex-col">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold tracking-tight">GitHub Repositories</h2>
-          <Button onClick={() => syncRepos()} disabled={isSyncing} variant="outline">
-            {isSyncing ? 'Syncing...' : 'Sync from GitHub'}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleScanSelected} 
+              disabled={isScanningBatch || selectedRepoFullNames.size === 0} 
+              variant="outline"
+            >
+              {isScanningBatch ? 'Scanning...' : `Scan Selected (${selectedRepoFullNames.size})`}
+            </Button>
+            <Button onClick={() => syncRepos()} disabled={isSyncing} variant="outline">
+              {isSyncing ? 'Syncing...' : 'Sync from GitHub'}
+            </Button>
+          </div>
         </div>
         
         <div className="flex gap-2 mb-4">
@@ -43,6 +93,9 @@ export default function GitHub() {
             repos={repos || []} 
             onSelectRepo={setSelectedRepo} 
             selectedRepoId={selectedRepo?.id || null} 
+            selectedRepoFullNames={selectedRepoFullNames}
+            onToggleSelect={handleToggleSelect}
+            onToggleSelectAll={handleToggleSelectAll}
           />
         )}
       </div>
@@ -65,12 +118,11 @@ export default function GitHub() {
             )}
 
             <SecurityScanPanel scan={selectedRepo.latest_scan} />
-            <ReadmeGenerator repoFullName={selectedRepo.full_name} hasReadme={selectedRepo.has_readme} />
             
           </div>
         ) : (
           <div className="h-full flex items-center justify-center text-muted-foreground">
-            Select a repository to view details, scan for secrets, or generate a README.
+            Select a repository to view details or scan for secrets.
           </div>
         )}
       </div>

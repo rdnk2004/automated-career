@@ -29,15 +29,22 @@ export const useScanRepo = () => {
   });
 };
 
-export const useGenerateReadme = () => {
+export const useScanAllRepos = () => {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (repoFullName: string) => githubApi.generateReadme(repoFullName)
+    mutationFn: githubApi.scanAllRepos,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repos'] });
+    }
   });
 };
 
-export const usePushReadme = () => {
+export const useScanBatchRepos = () => {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ repoFullName, content }: { repoFullName: string, content: string }) => 
-      githubApi.pushReadme(repoFullName, content)
+    mutationFn: (repoFullNames: string[]) => githubApi.scanBatchRepos(repoFullNames),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repos'] });
+    }
   });
 };

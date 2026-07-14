@@ -15,7 +15,6 @@ from schemas.analysis import SuggestionSetResponse, CareerScoreResponse, ResumeS
 
 from agents.linkedin_agent import analyze as analyze_linkedin_agent
 from agents.resume_agent import analyze as analyze_resume_agent
-from agents.github_agent import generate_readme as generate_readme_agent
 from agents.synthesis_agent import synthesize as synthesize_agent
 
 from pydantic import BaseModel, Field
@@ -32,8 +31,7 @@ class ResumeAnalysisRequest(BaseModel):
     resume_text: str = Field(..., min_length=10, max_length=50_000)
     target_role: str = Field(..., min_length=1, max_length=200)
 
-class ReadmeAnalysisRequest(BaseModel):
-    repo_full_name: str = Field(..., min_length=1, max_length=200)
+
 
 class SynthesisRequest(BaseModel):
     target_role: str = Field(..., min_length=1, max_length=200)
@@ -107,26 +105,7 @@ async def analyze_resume(request: Request, req: ResumeAnalysisRequest, db: Async
     return suggestion
 
 
-@router.post("/github/readme")
-@limiter.limit("5/minute")
-async def analyze_github_readme(request: Request, req: ReadmeAnalysisRequest, db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(GithubRepo).where(GithubRepo.full_name == req.repo_full_name))
-    repo = res.scalars().first()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repo not found")
 
-    from services.github_service import github_service
-    tree = await github_service.get_repo_file_tree(req.repo_full_name)
-    repo_data = {'name': repo.name, 'description': repo.description, 'language': repo.language, 'topics': repo.topics}
-
-    try:
-        readme_markdown = await generate_readme_agent(repo_data, json.dumps(tree), "")
-    except (RuntimeError, ValueError) as e:
-        logger.error(f"README generation failed: {e}")
-        raise HTTPException(status_code=502, detail=f"AI generation failed: {e}")
-
-    await save_suggestion_log(db, "github_readme", {"repo_full_name": req.repo_full_name}, readme_markdown)
-    return {"readme_markdown": readme_markdown}
 
 
 @router.post("/synthesis", response_model=CareerScoreResponse)

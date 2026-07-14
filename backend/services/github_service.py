@@ -40,7 +40,7 @@ class GitHubService:
             while True:
                 response = await self._get(
                     client,
-                    f"/users/{settings.github_username}/repos",
+                    "/user/repos",
                     params={"per_page": 100, "page": page}
                 )
                 data = response.json()
@@ -104,6 +104,7 @@ class GitHubService:
         
         has_gitignore = False
         has_env_file = False
+        has_readme = False
         leaked_secrets = []
         
         extensions_to_scan = ('.py', '.js', '.ts', '.json', '.yml', '.yaml', '.txt', '.md')
@@ -114,6 +115,9 @@ class GitHubService:
                 
             path = item.get("path", "")
             
+            if '/' not in path and path.lower() in ('readme.md', 'readme.txt', 'readme'):
+                has_readme = True
+                
             if path == ".gitignore" or path.endswith("/.gitignore"):
                 has_gitignore = True
             
@@ -137,6 +141,7 @@ class GitHubService:
         return {
             "has_gitignore": has_gitignore,
             "has_env_file": has_env_file,
+            "has_readme": has_readme,
             "leaked_secrets": leaked_secrets,
             "ai_issues": [] # To be populated by AI agent if needed
         }
