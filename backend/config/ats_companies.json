@@ -1,0 +1,10 @@
+{
+    "_comment": "board_token = the slug in the company's careers URL. Verify by visiting the careers page: Greenhouse URLs look like job-boards.greenhouse.io/{token} or boards.greenhouse.io/{token}; Lever URLs look like jobs.lever.co/{token}; Ashby URLs look like jobs.ashbyhq.com/{token}. Only 'razorpay' below has been verified against a live board — treat the rest as placeholders to check yourself before relying on them.",
+    "companies": [
+        {
+            "name": "Razorpay",
+            "ats": "greenhouse",
+            "board_token": "razorpaysoftwareprivatelimited"
+        }
+    ]
+}
