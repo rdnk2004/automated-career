@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useJobKeywords } from '@/hooks/useJobSearch';
 import { useJobStore } from '@/stores/jobStore';
 import { useProfile } from '@/hooks/useProfile';
@@ -6,7 +6,7 @@ import { useRepos } from '@/hooks/useGithubRepos';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Copy, Info, Sparkles, Filter, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import { Check, Copy, Info, Sparkles, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 
 interface CellDetail {
   kw: string;
