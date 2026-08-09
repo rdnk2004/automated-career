@@ -32,13 +32,17 @@ def normalize_date(date_str: str) -> str:
     return date_str
 
 def parse_csv_content(csv_bytes: bytes) -> List[Dict[str, str]]:
-    """Parse raw CSV bytes into a list of dictionaries."""
-    try:
-        text = csv_bytes.decode('utf-8-sig')
-        reader = csv.DictReader(io.StringIO(text))
-        return [row for row in reader]
-    except Exception:
-        return []
+    """Parse raw CSV bytes into a list of dictionaries with encoding fallbacks."""
+    for encoding in ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']:
+        try:
+            text = csv_bytes.decode(encoding)
+            reader = csv.DictReader(io.StringIO(text))
+            rows = [row for row in reader if row]
+            if rows:
+                return rows
+        except Exception:
+            continue
+    return []
 
 def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
     """

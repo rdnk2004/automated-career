@@ -6,8 +6,8 @@ import uuid
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-# Path to the company registry — adjust if you move this file within backend/config/
-_REGISTRY_PATH = Path(__file__).resolve().parent / "config" / "ats_companies.json"
+# Path to the company registry located in backend/config/
+_REGISTRY_PATH = Path(__file__).resolve().parent.parent / "config" / "ats_companies.json"
 
 
 def _strip_html(raw: str) -> str:

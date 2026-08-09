@@ -2,6 +2,7 @@ import json
 import re
 import logging
 import asyncio
+from typing import Optional
 import google.generativeai as genai
 from config import settings
 
@@ -57,40 +58,33 @@ class GeminiService:
         """
         Robustly extract JSON from Gemini responses.
         Handles markdown fences, commentary before/after JSON, and nested objects.
+        Uses balanced brace/bracket counting to avoid greedy regex match failures.
         """
         if not text:
             raise ValueError("Empty response from AI model")
 
         text = text.strip()
 
-        # Strip markdown code fences
-        if text.startswith("```json"):
-            text = text[len("```json"):]
-        elif text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
+        # Extract content from markdown code block if present
+        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text, re.IGNORECASE)
+        if fence_match:
+            candidate = fence_match.group(1).strip()
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                text = candidate
 
-        # Attempt 1: direct parse
+        # Direct parse attempt
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
 
-        # Attempt 2: find the first { ... } block (greedy match for nested objects)
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if match:
+        # Balanced brace / bracket extractor
+        extracted = self._extract_json_substring(text)
+        if extracted:
             try:
-                return json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
-
-        # Attempt 3: find the first [ ... ] block (if response is an array)
-        match = re.search(r'\[.*\]', text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
+                return json.loads(extracted)
             except json.JSONDecodeError:
                 pass
 
@@ -102,6 +96,48 @@ class GeminiService:
             "AI returned a response that could not be parsed as JSON. "
             "Try again or adjust the prompt."
         )
+
+    def _extract_json_substring(self, text: str) -> Optional[str]:
+        """
+        Finds the first valid JSON object ({...}) or array ([...]) by scanning
+        characters with state-aware string and escape tracking.
+        """
+        start_obj = text.find("{")
+        start_arr = text.find("[")
+
+        if start_obj == -1 and start_arr == -1:
+            return None
+
+        if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
+            open_char, close_char = "{", "}"
+            start_idx = start_obj
+        else:
+            open_char, close_char = "[", "]"
+            start_idx = start_arr
+
+        depth = 0
+        in_string = False
+        escape = False
+
+        for i in range(start_idx, len(text)):
+            char = text[i]
+            if escape:
+                escape = False
+                continue
+            if char == '\\':
+                escape = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if not in_string:
+                if char == open_char:
+                    depth += 1
+                elif char == close_char:
+                    depth -= 1
+                    if depth == 0:
+                        return text[start_idx:i+1]
+        return None
 
 
 gemini_service = GeminiService()

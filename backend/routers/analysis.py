@@ -44,7 +44,11 @@ async def save_suggestion_log(db: AsyncSession, suggestion_type: str, context: d
         suggestion=suggestion
     )
     db.add(log)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to save suggestion log: {e}")
 
 
 @router.post("/linkedin", response_model=SuggestionSetResponse)
@@ -105,9 +109,6 @@ async def analyze_resume(request: Request, req: ResumeAnalysisRequest, db: Async
     return suggestion
 
 
-
-
-
 @router.post("/synthesis", response_model=CareerScoreResponse)
 @limiter.limit("5/minute")
 async def analyze_synthesis(request: Request, req: SynthesisRequest, db: AsyncSession = Depends(get_db)):
@@ -132,16 +133,20 @@ async def analyze_synthesis(request: Request, req: SynthesisRequest, db: AsyncSe
         logger.error(f"Synthesis failed: {e}")
         raise HTTPException(status_code=502, detail=f"AI synthesis failed: {e}")
 
-    # Save snapshot
-    snapshot = CareerScoreSnapshot(
-        linkedin_score=career_score.linkedin,
-        github_score=career_score.github,
-        resume_match_score=career_score.resume,
-        overall_score=career_score.overall,
-        target_role=req.target_role
-    )
-    db.add(snapshot)
-    await db.commit()
+    # Save snapshot defensively
+    try:
+        snapshot = CareerScoreSnapshot(
+            linkedin_score=career_score.linkedin,
+            github_score=career_score.github,
+            resume_match_score=career_score.resume,
+            overall_score=career_score.overall,
+            target_role=req.target_role
+        )
+        db.add(snapshot)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to save career score snapshot: {e}")
 
     await save_suggestion_log(db, "synthesis", {"target_role": req.target_role}, json.dumps(career_score.model_dump()))
     return career_score
