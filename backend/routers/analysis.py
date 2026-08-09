@@ -1,10 +1,10 @@
 import json
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from database import get_db
 from models.profile import UserProfile, ProfileSection
@@ -16,6 +16,7 @@ from schemas.analysis import SuggestionSetResponse, CareerScoreResponse, ResumeS
 from agents.linkedin_agent import analyze as analyze_linkedin_agent
 from agents.resume_agent import analyze as analyze_resume_agent
 from agents.synthesis_agent import synthesize as synthesize_agent
+from services.pdf_service import pdf_export_service
 
 from pydantic import BaseModel, Field
 
@@ -30,6 +31,16 @@ class LinkedInAnalysisRequest(BaseModel):
 class ResumeAnalysisRequest(BaseModel):
     resume_text: str = Field(..., min_length=10, max_length=50_000)
     target_role: str = Field(..., min_length=1, max_length=200)
+
+class ResumeExportPDFRequest(BaseModel):
+    name: Optional[str] = "Candidate"
+    target_role: str = Field(..., min_length=1, max_length=200)
+    contact: Optional[Dict[str, str]] = Field(default_factory=dict)
+    summary: Optional[str] = ""
+    experience: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    skills: Optional[List[str]] = Field(default_factory=list)
+    education: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    certifications: Optional[List[str]] = Field(default_factory=list)
 
 
 
@@ -107,6 +118,26 @@ async def analyze_resume(request: Request, req: ResumeAnalysisRequest, db: Async
 
     await save_suggestion_log(db, "resume", {"target_role": req.target_role}, json.dumps(suggestion.model_dump()))
     return suggestion
+
+
+@router.post("/resume/export-pdf")
+@limiter.limit("10/minute")
+async def export_resume_pdf(request: Request, req: ResumeExportPDFRequest):
+    try:
+        pdf_bytes = pdf_export_service.generate_resume_pdf(req.model_dump())
+    except Exception as e:
+        logger.error(f"Failed to generate ATS PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
+
+    safe_name = (req.name or "Candidate").replace(" ", "_")
+    filename = f"{safe_name}_ATS_Resume.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
 
 
 @router.post("/synthesis", response_model=CareerScoreResponse)

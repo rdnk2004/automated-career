@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useResumeSuggestion } from '@/hooks/useJobSearch';
 import { useJobStore } from '@/stores/jobStore';
+import { analysisApi } from '@/services/analysisApi';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 
 export function ResumeSuggestions() {
@@ -11,6 +12,7 @@ export function ResumeSuggestions() {
   const [resumeText, setResumeText] = useState('');
   const { mutate: analyzeResume, data: suggestions, isPending } = useResumeSuggestion();
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleAnalyze = () => {
     if (resumeText.trim()) {
@@ -22,6 +24,29 @@ export function ResumeSuggestions() {
     navigator.clipboard.writeText(text);
     setCopiedIdx(idx);
     setTimeout(() => setCopiedIdx(null), 2000);
+  };
+
+  const handleExportPdf = async () => {
+    setIsExporting(true);
+    try {
+      const bullets = suggestions?.bullet_rewrites.map(b => b.suggested) || [];
+      await analysisApi.exportResumePdf({
+        target_role: activeTitle || "Software Engineer",
+        summary: resumeText.trim().slice(0, 400),
+        experience: [
+          {
+            title: activeTitle || "Software Engineer",
+            company: "Target Career History",
+            bullets: bullets.length > 0 ? bullets : [resumeText.trim()]
+          }
+        ],
+        skills: suggestions?.gap_keywords || ["Python", "TypeScript", "FastAPI", "React"]
+      });
+    } catch (err) {
+      console.error("Failed to export ATS PDF:", err);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -44,7 +69,7 @@ export function ResumeSuggestions() {
             value={resumeText}
             onChange={(e) => setResumeText(e.target.value)}
           />
-          <div className="flex justify-end mt-4">
+          <div className="flex justify-end gap-3 mt-4">
             <Button onClick={handleAnalyze} disabled={isPending || !resumeText.trim()}>
               {isPending ? 'Analyzing...' : 'Generate Suggestions'}
             </Button>
@@ -55,7 +80,18 @@ export function ResumeSuggestions() {
       {suggestions && (
         <Card className="flex-1 overflow-y-auto">
           <CardHeader>
-            <CardTitle className="text-lg">AI Bullet Rewrites</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-lg">AI Bullet Rewrites</CardTitle>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={handleExportPdf}
+                disabled={isExporting}
+                className="gap-2 border-primary/50 text-primary hover:bg-primary/10"
+              >
+                {isExporting ? 'Generating PDF...' : '📄 Download ATS PDF'}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {suggestions.bullet_rewrites.map((rewrite, idx) => (
