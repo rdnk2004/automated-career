@@ -1,19 +1,23 @@
 # Career OS 🚀
 
-> A personal, self-hosted AI career assistant designed for automated career maintenance. 
+> A personal, self-hosted AI career assistant designed for automated career maintenance & production-grade engineering excellence.
 
-Career OS connects LinkedIn profile data, GitHub repositories, and Indeed job listings through a unified AI layer powered by Gemini 2.5 Pro. It is built as **personal tooling for a single user (RDNK)** rather than a multi-tenant SaaS product.
+Career OS connects LinkedIn profile data, GitHub repositories, and live job market listings (Greenhouse, Lever, Ashby) through a unified AI layer powered by Gemini 2.5 Pro. It is built as **personal tooling for a single user (RDNK)** with $0-cost self-hosted deployment.
 
 ---
 
-## 💡 The Three Core Problems It Solves
+## 💡 Key Capabilities & Core Problems Solved
 
-1. **LinkedIn Profile Maintenance**  
+1. **LinkedIn Profile Optimization**  
    Analyzes your profile data against target Job Descriptions (JDs), identifies keyword gaps, and suggests tailored headline and section rewrites using a strict AI scoring engine.
-2. **GitHub Repository Health & Documentation**  
-   Performs nightly security/quality scans (detects hardcoded secrets, missing `.gitignore` files) and auto-generates professional `README.md` files based on actual project source code, with the ability to push updates directly to GitHub.
-3. **Resume Alignment & Job Market Signal Analysis**  
-   Performs gap analysis mapping your skills directly to live Indeed JDs, generating interactive skill match heatmaps, key terms word clouds, and copying AI-rewritten resume bullets with evidence references.
+2. **GitHub Repository Health & Security**  
+   Performs security/quality scans (detects hardcoded secrets, missing `.gitignore` files) and auto-generates professional `README.md` files based on actual project source code, with the ability to push updates directly to GitHub.
+3. **One-Click ATS Resume PDF Exporter**  
+   Generates a single-page, ATS-compliant PDF resume (`Candidate_ATS_Resume.pdf`) formatted using ReportLab with clean typography (Helvetica), 0.5-inch margins, and structured section layout, ready for instant job submission.
+4. **Interactive Skill Gap Heatmap Matrix**  
+   Correlates target job market demands against 4 distinct data sources (**Profile Skills**, **GitHub Repositories**, **Work Experience**, and **Education**). Includes interactive evidence hover tooltips, match rate metrics, and 1-click copy badges for missing high-demand skills.
+5. **Live ATS Job Search Integration**  
+   Fetches live job listings directly from registered **Greenhouse**, **Lever**, and **Ashby** job boards with fallback aggregation.
 
 ---
 
@@ -21,10 +25,10 @@ Career OS connects LinkedIn profile data, GitHub repositories, and Indeed job li
 
 | Layer | Technology | Key Version / Notes |
 | :--- | :--- | :--- |
-| **Frontend** | React 18 + Vite 5 + TypeScript | Styled using Tailwind CSS + `shadcn/ui` primitives. State managed with Zustand. |
-| **Backend** | FastAPI + Python 3.12 | 100% asynchronous endpoints and services. |
-| **Database** | PostgreSQL 16 + Alembic | Accessed using SQLAlchemy 2.0 via `asyncpg` driver. |
-| **AI Layer** | Google Generative AI SDK | Powered by `gemini-2.5-pro-preview-05-06` model. |
+| **Frontend** | React 18 + Vite 5 + TypeScript | Styled using Tailwind CSS + `shadcn/ui` primitives. State managed with Zustand + TanStack Query. |
+| **Backend** | FastAPI + Python 3.12 | 100% asynchronous endpoints, ReportLab PDF generation, slowapi rate limiting. |
+| **Database** | PostgreSQL 16 + Alembic | Accessed using SQLAlchemy 2.0 via `asyncpg` driver with transaction rollback hygiene. |
+| **AI Layer** | Google Generative AI SDK | Powered by `gemini-2.5-pro-preview-05-06` model with state-aware JSON response extraction. |
 | **Orchestration** | n8n | Runs scheduled jobs and triggers via Docker container. |
 | **Containers** | Docker + Docker Compose | Local-parity dev/prod multi-container environment. |
 
@@ -33,18 +37,18 @@ Career OS connects LinkedIn profile data, GitHub repositories, and Indeed job li
 ## 📐 Architecture & Data Flow
 
 ```
-   [ Indeed Jobs API ]           [ GitHub API ]          [ LinkedIn ZIP Export ]
-            │                          │                            │
-      (Weekly Sync)              (Nightly Sync)             (On-Demand Upload)
-            │                          │                            │
-            ▼                          ▼                            ▼
+   [ Greenhouse / Lever / Ashby ATS ]     [ GitHub API ]          [ LinkedIn ZIP Export ]
+                 │                             │                            │
+           (Weekly Sync)                 (Nightly Sync)             (On-Demand Upload)
+                 │                             │                            │
+                 ▼                             ▼                            ▼
    ┌────────────────────────────────────────────────────────────────────────┐
    │                            n8n Orchestration                           │
    └───────┬───────────────────────────┬────────────────────────────┬───────┘
            │                           │                            │
            ▼                           ▼                            ▼
 ┌─────────────────────┐     ┌─────────────────────┐      ┌─────────────────────┐
-│   Indeed Service    │     │   GitHub Service    │      │   LinkedIn Parser   │
+│     ATS Service     │     │   GitHub Service    │      │   LinkedIn Parser   │
 └──────────┬──────────┘     └──────────┬──────────┘      └──────────┬──────────┘
            │                           │                            │
            ▼                           ▼                            ▼
@@ -66,13 +70,14 @@ Career OS connects LinkedIn profile data, GitHub repositories, and Indeed job li
                                        ▼
                             ┌─────────────────────┐
                             │    FastAPI Backend  │
+                            │ (PDF / REST Engine) │
                             └──────────┬──────────┘
                                        │ (REST API)
                                        ▼
                             ┌─────────────────────┐
                             │   React Frontend    │
                             │  (Port 5173 / Web)  │
-                            └─────────────────────┘
+                            └──────────┬──────────┘
 ```
 
 ---
@@ -84,8 +89,9 @@ career-os/
 ├── docker-compose.yml           # Spins up postgres db, backend, frontend, n8n, and volumes
 ├── .env.example                 # Configuration blueprint for environment credentials
 ├── .gitignore
-├── GEMINI.md                    # Core project specifications and rules (ignored by git)
-├── QUICKREF.md                  # Quick CLI commands reference (ignored by git)
+├── GEMINI.md                    # Core project specifications and rules
+├── QUICKREF.md                  # Quick CLI commands reference
+├── LICENSE                      # MIT License file
 │
 ├── backend/                     # FastAPI ASGI Server
 │   ├── main.py                  # Server initialization, rate limiters, CORS, routes routing
@@ -93,18 +99,19 @@ career-os/
 │   ├── database.py              # Async DB engine & SessionLocal configurations
 │   ├── models/                  # SQLAlchemy ORM models (user_profile, github_repos, etc.)
 │   ├── schemas/                 # Pydantic serialization schemas for input/output contracts
-│   ├── routers/                 # Thin route-handlers layer
-│   ├── services/                # Business logic integrations (GitHub, Indeed, Gemini clients)
+│   ├── routers/                 # Thin route-handlers layer (analysis, github, jobs, profile)
+│   ├── services/                # Business logic (ats_service, pdf_service, github_service, etc.)
 │   ├── agents/                  # Prompt-heavy AI processing engines (LinkedIn, Synthesis, etc.)
+│   ├── tests/                   # Pytest automated unit testing suite
 │   └── migrations/              # Database migration configurations and version files (Alembic)
 │
 ├── frontend/                    # Vite + React Client
 │   ├── src/
 │   │   ├── components/          # Domain layouts (dashboard, linkedin, github, resume)
 │   │   ├── hooks/               # TanStack query & mutation hooks
-│   │   ├── stores/              # Zustand hooks for client state (Zustand)
-│   │   ├── services/            # Axios API wrappers (profileApi, jobsApi, etc.)
-│   │   ├── pages/               # Main layout views (Dashboard, Resume, Settings)
+│   │   ├── stores/              # Zustand hooks for client state
+│   │   ├── services/            # Axios API wrappers (profileApi, jobsApi, analysisApi)
+│   │   ├── pages/               # Main layout views (Dashboard, Resume, GitHub, Settings)
 │   │   └── main.tsx             # Application entrypoint (React Query Client + Router)
 │   └── tailwind.config.ts       # Styles configuration
 │
@@ -153,29 +160,39 @@ Once all containers show as healthy, you can access the tools at:
 
 ---
 
-## 🔄 Scheduled n8n Workflows
+## 🧪 Testing & Quality Assurance
 
-Orchestration is managed inside n8n. To activate schedules, import the JSON files found under `n8n/workflows/` directly into your n8n workspace UI:
+Run the automated backend test suite using Pytest inside the backend environment:
+```bash
+.venv\Scripts\python -m pytest
+```
 
-1.  **`weekly_job_sync.json`** (Runs Mondays at 07:00)  
-    Reads settings -> fetches 30 Job Descriptions per target role from Indeed -> aggregates technical keywords -> triggers synthesis.
-2.  **`github_nightly_sync.json`** (Runs daily at 02:00)  
-    Triggers backend GitHub repository sync -> runs security/quality scans on flagged repositories.
-3.  **`linkedin_analysis_trigger.json`** (Webhook-driven)  
-    Listens for profile export ZIP uploads, triggers immediate profile parser parsing and scoring.
-
----
-
-## 📐 Coding Conventions
-
-*   **Thin Routers, Fat Services**: Keep routers strictly responsible for network requests and responses. Business logic belongs in `/services` and prompt engineering belongs in `/agents`.
-*   **Early Returns**: Prefer guard clauses and early returns to avoid deeply nested blocks in both Python and TypeScript code.
-*   **No Synchronous Endpoints**: Always define endpoint and database methods asynchronously (`async def`, `await`).
-*   **React State Management**: React Query (TanStack Query) handles all server-side state. Standard components use Zustand stores to manage UI-only state; do not abuse `useState` for API synchronization.
-*   **Compact Components**: Keep UI component files under 200 lines. Split logical structures into reusable files when boundaries are exceeded.
+Check frontend TypeScript compilation:
+```bash
+npx tsc --noEmit
+```
 
 ---
 
-## 🔒 Security Policy
+## 📄 License
 
-This tool runs as a self-hosted personal service. Do **NOT** publish this application directly to a public server without additional security layers. An basic key `api_auth_key` can be specified inside `.env` to validate calls from frontend to backend. Always verify that your database credentials, API keys, and GitHub PATs are safe inside your `.env` file, which is ignored by `.gitignore`.
+This project is licensed under a **[Custom Non-Commercial & Source-Available License](LICENSE)**.
+
+```
+Custom Non-Commercial & Source-Available License
+
+Copyright (c) 2026 RDNK. All rights reserved.
+
+PERMITTED USES:
+Permission is hereby granted to any person obtaining a copy of this software and associated 
+documentation files (the "Software"), to inspect, run, modify, and use the Software for 
+PERSONAL AND NON-COMMERCIAL PURPOSES ONLY.
+
+PROHIBITED USES:
+1. COMMERCIAL SALE & RESALE: You may NOT sell, lease, sublicense, monetize, or commercialize 
+   the Software, its source code, derivative works, or ideas in any form (including as a SaaS product, 
+   enterprise service, or paid application).
+2. UNAUTHORIZED PUBLICATION & PAPERWORK: You may NOT publish, present, or claim the project, 
+   its underlying research, architecture, or design as your own original paperwork, publication, 
+   or product without express written consent from the copyright owner (RDNK).
+```
