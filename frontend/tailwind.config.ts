@@ -10,6 +10,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        heading: ['Plus Jakarta Sans', 'sans-serif'],
+      },
       colors: {
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
@@ -52,11 +56,35 @@ const config: Config = {
           '5': 'hsl(var(--chart-5))'
         }
       },
+      boxShadow: {
+        glow: '0 0 25px -5px rgba(99, 102, 241, 0.25)',
+        'glow-lg': '0 0 35px -5px rgba(99, 102, 241, 0.4)',
+        glass: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+      },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)'
-      }
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'pulse-slow': 'pulseGlow 4s infinite ease-in-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        pulseGlow: {
+          '0%, 100%': { opacity: '0.4' },
+          '50%': { opacity: '0.8' },
+        },
+      },
     }
   },
   plugins: [tailwindcssAnimate, typography],

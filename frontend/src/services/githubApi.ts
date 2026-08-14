@@ -22,5 +22,13 @@ export const githubApi = {
   scanBatchRepos: async (repoFullNames: string[]): Promise<{ status: string, message: string }> => {
     const res = await api.post('/api/github/scan/batch', { repo_full_names: repoFullNames });
     return res.data;
+  },
+  generateReadme: async (repoFullName: string): Promise<{ readme_markdown: string; suggestion_id?: string }> => {
+    const res = await api.post('/api/github/readme/generate', { repo_full_name: repoFullName });
+    return res.data;
+  },
+  pushReadme: async (payload: { repoFullName: string; content: string }): Promise<{ committed: boolean; sha?: string }> => {
+    const res = await api.post('/api/github/readme/push', { repo_full_name: payload.repoFullName, content: payload.content });
+    return res.data;
   }
 };

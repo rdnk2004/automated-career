@@ -48,3 +48,19 @@ export const useScanBatchRepos = () => {
     }
   });
 };
+
+export const useGenerateReadme = () => {
+  return useMutation({
+    mutationFn: (repoFullName: string) => githubApi.generateReadme(repoFullName)
+  });
+};
+
+export const usePushReadme = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { repoFullName: string; content: string }) => githubApi.pushReadme(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repos'] });
+    }
+  });
+};

@@ -161,37 +161,31 @@ export function GapHeatmap() {
 
   if (isKwLoading || isProfLoading) {
     return (
-      <Card className="p-6">
-        <div className="flex items-center justify-center space-x-3 text-muted-foreground animate-pulse">
-          <Sparkles className="w-5 h-5 text-primary animate-spin" />
-          <span className="text-sm font-medium">Synthesizing skill gap matrix...</span>
-        </div>
+      <Card className="p-8 glass-card rounded-2xl border border-border/40 text-center text-muted-foreground space-y-3">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p className="text-xs font-medium">Synthesizing skill gap matrix...</p>
       </Card>
     );
   }
 
   if (!matrixData || matrixData.allColsCount === 0) {
     return (
-      <Card className="p-6">
-        <div className="text-center space-y-2">
-          <Info className="w-8 h-8 text-muted-foreground mx-auto" />
-          <h3 className="font-semibold text-base">No Keyword Matrix Available</h3>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Search for a target job role in the bar above to analyze skill alignment against live market job postings.
-          </p>
-        </div>
+      <Card className="p-8 glass-card rounded-2xl border border-dashed border-border/40 text-center text-muted-foreground space-y-2 text-xs">
+        <Info className="w-6 h-6 text-indigo-400/50 mx-auto" />
+        <h4 className="font-semibold text-foreground">No Keyword Matrix Available</h4>
+        <p>Search for a target job role in the bar above to analyze skill alignment against live market job postings.</p>
       </Card>
     );
   }
 
   return (
-    <Card className="overflow-hidden border shadow-sm">
-      <CardHeader className="pb-3 border-b bg-muted/20">
+    <Card className="overflow-hidden border border-border/40 glass-card rounded-2xl shadow-xl">
+      <CardHeader className="pb-3 border-b border-border/30 bg-secondary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <CardTitle className="text-lg font-bold">Skill Gap Heatmap Matrix</CardTitle>
-              <Badge variant="outline" className="text-xs font-semibold">
+              <CardTitle className="text-sm font-bold font-heading text-foreground">Skill Gap Heatmap Matrix</CardTitle>
+              <Badge variant="outline" className="text-[10px] font-semibold bg-indigo-500/10 text-indigo-300 border-indigo-500/20">
                 Target: {activeTitle || "Software Engineer"}
               </Badge>
             </div>
@@ -203,58 +197,52 @@ export function GapHeatmap() {
           {/* Metric Badge */}
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <div className="text-xs text-muted-foreground font-medium">Market Alignment</div>
-              <div className="text-lg font-extrabold text-primary">
+              <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Market Alignment</div>
+              <div className="text-xl font-extrabold font-heading text-emerald-400">
                 {matrixData.matchRate}%
               </div>
             </div>
-            <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary flex items-center justify-center font-bold text-xs">
+            <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center font-bold text-xs text-indigo-300 shadow-md">
               {matrixData.matchedCount}/{matrixData.allColsCount}
             </div>
           </div>
         </div>
 
         {/* Filter Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t">
-          <div className="flex items-center gap-1.5 bg-background p-1 rounded-md border text-xs">
-            <Button
-              size="sm"
-              variant={filterMode === 'all' ? 'default' : 'ghost'}
-              className="h-7 text-xs px-2.5"
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t border-border/30">
+          <div className="flex items-center gap-1 bg-secondary/40 p-1 rounded-xl border border-border/40 text-xs">
+            <button
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${filterMode === 'all' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => setFilterMode('all')}
             >
               All ({matrixData.allColsCount})
-            </Button>
-            <Button
-              size="sm"
-              variant={filterMode === 'matched' ? 'default' : 'ghost'}
-              className="h-7 text-xs px-2.5 text-emerald-600 dark:text-emerald-400"
+            </button>
+            <button
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${filterMode === 'matched' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => setFilterMode('matched')}
             >
               Matched ({matrixData.matchedCount})
-            </Button>
-            <Button
-              size="sm"
-              variant={filterMode === 'missing' ? 'default' : 'ghost'}
-              className="h-7 text-xs px-2.5 text-rose-600 dark:text-rose-400"
+            </button>
+            <button
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${filterMode === 'missing' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => setFilterMode('missing')}
             >
               Missing ({matrixData.missingCount})
-            </Button>
+            </button>
           </div>
 
           {/* Legend */}
-          <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-4 text-[11px]">
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-emerald-500 border border-emerald-600 inline-block"></span>
+              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 shadow-sm inline-block"></span>
               <span className="text-muted-foreground font-medium">Full Match</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-amber-400 border border-amber-500 inline-block"></span>
+              <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 shadow-sm inline-block"></span>
               <span className="text-muted-foreground font-medium">Partial</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 inline-block"></span>
+              <span className="w-2.5 h-2.5 rounded-sm bg-slate-800 border border-slate-700 inline-block"></span>
               <span className="text-muted-foreground font-medium">Missing</span>
             </div>
           </div>
@@ -264,16 +252,16 @@ export function GapHeatmap() {
       <CardContent className="p-0 relative overflow-x-auto">
         <div className="p-4 min-w-[700px]">
           {matrixData.cols.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
+            <div className="py-8 text-center text-xs text-muted-foreground">
               No keywords match the selected filter criteria.
             </div>
           ) : (
             <table className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr>
-                  <th className="p-2 border-b font-semibold text-muted-foreground w-40">Source / Keyword</th>
+                  <th className="p-2 border-b border-border/30 font-semibold text-muted-foreground w-40">Source / Keyword</th>
                   {matrixData.cols.map((col, idx) => (
-                    <th key={idx} className="p-2 border-b font-semibold text-center min-w-[50px] max-w-[80px]">
+                    <th key={idx} className="p-2 border-b border-border/30 font-semibold text-center min-w-[50px] max-w-[80px]">
                       <div className="truncate font-medium text-foreground" title={`${col.keyword} (Freq: ${col.frequency})`}>
                         {col.keyword}
                       </div>
@@ -284,27 +272,27 @@ export function GapHeatmap() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border/30">
                 {matrixData.rows.map((r, rIdx) => (
-                  <tr key={rIdx} className="hover:bg-muted/10 transition-colors">
-                    <td className="p-2 border-b font-medium text-foreground whitespace-nowrap">
+                  <tr key={rIdx} className="hover:bg-secondary/30 transition-colors">
+                    <td className="p-2 border-b border-border/30 font-medium text-foreground whitespace-nowrap">
                       {r.label}
                     </td>
                     {matrixData.cols.map((col, cIdx) => {
                       const evalResult = col.evaluations.find(ev => ev.rowId === r.id)!;
-                      let bgClass = 'bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700';
+                      let bgClass = 'bg-slate-900 border-slate-800';
                       
                       if (evalResult.status === 'match') {
-                        bgClass = 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 shadow-sm cursor-pointer';
+                        bgClass = 'bg-emerald-500 hover:bg-emerald-400 border-emerald-400 shadow-sm shadow-emerald-500/20 cursor-pointer';
                       } else if (evalResult.status === 'partial') {
-                        bgClass = 'bg-amber-400 hover:bg-amber-500 border-amber-500 shadow-sm cursor-pointer';
+                        bgClass = 'bg-amber-400 hover:bg-amber-300 border-amber-400 shadow-sm shadow-amber-400/20 cursor-pointer';
                       }
 
                       return (
-                        <td key={cIdx} className="p-2 border-b text-center align-middle">
+                        <td key={cIdx} className="p-2 border-b border-border/30 text-center align-middle">
                           <button
                             type="button"
-                            className={`w-6 h-6 rounded-md border transition-all transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring ${bgClass}`}
+                            className={`w-5 h-5 rounded-md border transition-all transform hover:scale-110 focus:outline-none ${bgClass}`}
                             onMouseEnter={() => setHoveredCell({
                               kw: col.keyword,
                               frequency: col.frequency,
@@ -326,12 +314,12 @@ export function GapHeatmap() {
 
           {/* Interactive Evidence Hover Popover */}
           {hoveredCell && (
-            <div className="mt-4 p-3 rounded-lg border bg-card shadow-md text-xs space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <div className="mt-4 p-3 rounded-xl border border-indigo-500/30 bg-slate-950/90 shadow-xl text-xs space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
               <div className="flex items-center justify-between font-semibold">
                 <span className="flex items-center gap-1.5 text-foreground">
-                  {hoveredCell.status === 'match' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                  {hoveredCell.status === 'partial' && <AlertTriangle className="w-4 h-4 text-amber-500" />}
-                  {hoveredCell.status === 'missing' && <XCircle className="w-4 h-4 text-rose-500" />}
+                  {hoveredCell.status === 'match' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                  {hoveredCell.status === 'partial' && <AlertTriangle className="w-4 h-4 text-amber-400" />}
+                  {hoveredCell.status === 'missing' && <XCircle className="w-4 h-4 text-rose-400" />}
                   {hoveredCell.kw}
                   <span className="text-[10px] text-muted-foreground font-normal">
                     (Demanded in {hoveredCell.frequency} job postings)
@@ -349,11 +337,11 @@ export function GapHeatmap() {
 
           {/* Missing Skills Recommendation Box */}
           {matrixData.missingKeywords.length > 0 && (
-            <div className="mt-4 p-3 rounded-lg border bg-rose-500/5 dark:bg-rose-950/20 border-rose-500/20">
+            <div className="mt-4 p-3.5 rounded-xl border bg-rose-500/10 border-rose-500/20">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5" />
-                  Top Missing High-Demand Skills (Click to copy for your resume):
+                  Top Missing High-Demand Skills (Click to copy for resume):
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -362,11 +350,11 @@ export function GapHeatmap() {
                     key={skill}
                     size="sm"
                     variant="outline"
-                    className="h-6 text-[11px] px-2 bg-background hover:bg-muted border-rose-200 dark:border-rose-800"
+                    className="h-6 text-[11px] px-2.5 bg-slate-900 hover:bg-slate-800 border-rose-500/30 text-rose-300"
                     onClick={() => handleCopySkill(skill)}
                   >
                     {copiedSkill === skill ? (
-                      <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                      <span className="flex items-center gap-1 text-emerald-400">
                         <Check className="w-3 h-3" /> Copied
                       </span>
                     ) : (
