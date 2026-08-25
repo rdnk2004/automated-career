@@ -104,7 +104,7 @@ export default function Dashboard() {
               No Career Score Snapshot Yet
             </h3>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-              Click <span className="text-indigo-400 font-semibold">"Run Audit"</span> above to trigger Gemini 2.5 Pro to synthesize your LinkedIn profile, GitHub repositories, and live Indeed JDs into your first career scorecard.
+              Click <span className="text-indigo-400 font-semibold">"Run Audit"</span> above to trigger Gemini 3.6 Flash to synthesize your LinkedIn profile, GitHub repositories, and live Indeed JDs into your first career scorecard.
             </p>
           </div>
           <Button

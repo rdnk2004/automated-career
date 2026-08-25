@@ -164,7 +164,7 @@ export function Settings() {
               <div className="space-y-1">
                 <div className="font-bold text-sm text-foreground flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-indigo-400" />
-                  Google Gemini 2.5 Pro
+                  Google Gemini 3.6 Flash
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Powers the multi-agent AI orchestration layer (LinkedIn scoring, README synthesis, resume analysis).
@@ -172,7 +172,7 @@ export function Settings() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="outline" className="text-[10px] font-mono bg-slate-900 text-indigo-300 border-border/40">
-                  gemini-2.5-pro-preview
+                  gemini-3.6-flash
                 </Badge>
                 <Badge
                   variant={settings?.gemini_key_set ? 'success' : 'destructive'}

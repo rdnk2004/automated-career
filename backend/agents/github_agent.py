@@ -54,7 +54,7 @@ Return ONLY a valid JSON object matching this schema:
   "architecture_summary": "Modular async backend service with SQLAlchemy connection pooling, integrated with a Vite React client and automated background telemetry workers.",
   "resume_bullets": [
     "Architected fullstack career intelligence engine utilizing FastAPI and PostgreSQL, reducing latency by 45% with async connection pooling.",
-    "Engineered automated Gemini 2.5 Pro extraction pipelines processing structured ATS job listings across 3 major platforms.",
+    "Engineered automated Gemini 3.6 Flash extraction pipelines processing structured ATS job listings across 3 major platforms.",
     "Designed reactive UI with React 18 and TanStack Query, achieving sub-100ms client-side cache invalidation."
   ],
   "recommendation_reason": "High-signal fullstack architecture showcasing production-grade async Python and modern React, directly relevant to Senior engineering interviews.",
@@ -187,7 +187,7 @@ graph TD
   User([User / Client]) --> Frontend[React / Vite Interface]
   Frontend --> API[FastAPI Backend Service]
   API --> Database[(PostgreSQL Engine)]
-  API --> AI[Gemini 2.5 Pro Engine]
+  API --> AI[Gemini 3.6 Flash Engine]
 ```
 3. Key Features: Bulleted highlights inferred from actual code.
 4. Tech Stack Table: Categories (Frontend, Backend, Database, DevOps, AI) with notes.

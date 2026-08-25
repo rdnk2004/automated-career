@@ -228,7 +228,7 @@ export function SuggestionPanel({
             {isLoading ? (
               <div className="p-8 text-center text-muted-foreground space-y-3">
                 <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs">Synthesizing bullet rewrites with Gemini 2.5 Pro...</p>
+                <p className="text-xs">Synthesizing bullet rewrites with Gemini 3.6 Flash...</p>
               </div>
             ) : !suggestions || suggestions.rewrites.length === 0 ? (
               <div className="p-10 text-center text-muted-foreground glass-card rounded-2xl border border-dashed border-border/40 text-xs space-y-3 shadow-xl">

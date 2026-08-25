@@ -34,7 +34,7 @@ class ResumeParserService:
 
     async def parse_resume(self, file_bytes: bytes, filename: str, target_role: Optional[str] = None) -> Dict[str, Any]:
         """
-        Extracts raw text and utilizes Gemini 2.5 Pro structured extraction to return structured resume sections.
+        Extracts raw text and utilizes Gemini 3.6 Flash structured extraction to return structured resume sections.
         """
         raw_text = self.extract_text(file_bytes, filename)
         if not raw_text:

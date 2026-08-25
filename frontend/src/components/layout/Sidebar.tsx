@@ -138,7 +138,7 @@ export function Sidebar() {
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-              Gemini 2.5 Pro
+              Gemini 3.6 Flash
             </span>
             <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-bold border border-emerald-500/20 font-mono">
               Ready

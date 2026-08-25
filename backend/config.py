@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     indeed_api_key: str = ""
     indeed_publisher_id: str = ""
     gemini_api_key: str
-    gemini_model: str = "gemini-2.5-pro-preview-05-06"
+    gemini_model: str = "gemini-3.6-flash"
     linkedin_export_webhook_secret: str = ""
 
     # API key for authenticating frontend requests (empty = auth disabled)

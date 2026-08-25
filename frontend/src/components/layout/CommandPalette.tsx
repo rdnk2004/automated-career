@@ -154,7 +154,7 @@ export function CommandPalette() {
       id: 'action-audit',
       title: 'Run Career Readiness Audit',
       category: 'Actions',
-      subtitle: `Trigger Gemini 2.5 Pro synthesis for "${targetRole}"`,
+      subtitle: `Trigger Gemini 3.6 Flash synthesis for "${targetRole}"`,
       icon: Sparkles,
       iconColor: 'text-amber-400',
       shortcut: '↵',

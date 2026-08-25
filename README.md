@@ -9,7 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6.svg?logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-v3.4-38B2AC.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1.svg?logo=postgresql&logoColor=white)](https://postgresql.org)
-[![Gemini](https://img.shields.io/badge/Gemini-2.5%20Pro-4285F4.svg?logo=google&logoColor=white)](https://ai.google.dev)
+[![Gemini](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4.svg?logo=google&logoColor=white)](https://ai.google.dev)
 [![Tests](https://img.shields.io/badge/Tests-23%20Passed-10B981.svg?logo=pytest&logoColor=white)](https://pytest.org)
 [![License](https://img.shields.io/badge/License-Custom%20Non--Commercial-F59E0B.svg)](LICENSE)
 
@@ -17,7 +17,7 @@
 
 ## 🌟 Overview
 
-**Career OS** connects LinkedIn profile data, GitHub portfolio repositories, and live job market postings (Greenhouse, Lever, Ashby) through a unified AI layer powered by **Gemini 2.5 Pro**. It is engineered as **personal tooling for a single user (RDNK)** with $0-cost self-hosted deployment, zero telemetry leaks, and non-generic artisanal frontend craft.
+**Career OS** connects LinkedIn profile data, GitHub portfolio repositories, and live job market postings (Greenhouse, Lever, Ashby) through a unified AI layer powered by **Gemini 3.6 Flash**. It is engineered as **personal tooling for a single user (RDNK)** with $0-cost self-hosted deployment, zero telemetry leaks, and non-generic artisanal frontend craft.
 
 ---
 
@@ -46,11 +46,11 @@
 * **Market Search Radar**: Dual input queries for target role and location (`Remote`, hybrid), quick-role selector chips, and live scraped JD counters.
 * **Top 50 JD Keyword Cloud**: Dynamic font scaling with frequency badges and category filtering (`All`, `Technical`, `Domain`).
 * **Skill Gap Heatmap Matrix**: Correlates candidate profile skills, GitHub repos, work experience, and education against top 15 target market keywords with match rate indicators and hover evidence popovers.
-* **Inward Resume Binary Parser**: Ingests uploaded `.pdf` and `.txt` resumes via `/api/analysis/resume/upload` using `pypdf` text extraction and Gemini 2.5 Pro structured extraction.
+* **Inward Resume Binary Parser**: Ingests uploaded `.pdf` and `.txt` resumes via `/api/analysis/resume/upload` using `pypdf` text extraction and Gemini 3.6 Flash structured extraction.
 * **One-Click ATS PDF Exporter**: Compiles a single-column, ATS-compliant PDF resume formatted with ReportLab typography (0.5-inch margins, Helvetica) ready for submission.
 
 ### 5. ⚙️ System Settings & Diagnostic Command Center
-* **API Service Connections**: Live credential status indicators for Google Gemini 2.5 Pro (`gemini-2.5-pro-preview`), GitHub PAT (with scope checklist), and Indeed/ATS scrapers.
+* **API Service Connections**: Live credential status indicators for Google Gemini 3.6 Flash (`gemini-3.6-flash`), GitHub PAT (with scope checklist), and Indeed/ATS scrapers.
 * **Target Roles Portfolio Manager**: Interactive role management chips with Enter key support and 1-click active default workspace role switching.
 * **n8n Automation Engine**: Live workflow schedule monitor for `Nightly GitHub Sync`, `Weekly Market Analysis`, and `LinkedIn Trigger Sync` with direct console deep links.
 * **Transactional Data Reset**: Accessible confirmation modal to safely purge cached snapshots, suggestion logs, or background tasks via ACID transactions.
@@ -69,7 +69,7 @@
 | **Frontend** | React 18 + Vite 5 + TypeScript | Styled with Tailwind CSS + `shadcn/ui` primitives. State managed with Zustand + TanStack Query. |
 | **Backend** | FastAPI + Python 3.12 / 3.11 | 100% asynchronous endpoints, ReportLab PDF generation, slowapi rate limiting, `pypdf` extraction. |
 | **Database** | PostgreSQL 16 + Alembic | SQLAlchemy 2.0 async engine via `asyncpg` driver with transaction rollback hygiene. |
-| **AI Layer** | Google Generative AI SDK | Powered by `gemini-2.5-pro-preview-05-06` model with structured JSON response extraction. |
+| **AI Layer** | Google Generative AI SDK | Powered by `gemini-3.6-flash` model with structured JSON response extraction. |
 | **Orchestration** | n8n | Runs scheduled cron jobs and webhook triggers via self-hosted Docker container. |
 | **Containers** | Docker + Docker Compose | Full-parity dev and prod multi-container orchestration. |
 
@@ -227,7 +227,7 @@ DATABASE_URL=postgresql+asyncpg://career_os:password@localhost:5432/career_os_db
 GITHUB_PAT=ghp_your_personal_access_token
 GITHUB_USERNAME=your-github-username
 GEMINI_API_KEY=AIza_your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-pro-preview-05-06
+GEMINI_MODEL=gemini-3.6-flash
 N8N_BASIC_AUTH_USER=admin
 N8N_BASIC_AUTH_PASSWORD=change_this_password
 N8N_WEBHOOK_URL=http://localhost:5678
