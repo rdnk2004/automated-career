@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { analysisApi } from '@/services/analysisApi';
-import { CareerScore } from '@/types/analysis';
+import { CareerScore, CareerScoreHistory, CareerMetrics } from '@/types/analysis';
 
 /**
  * Fetches the latest cached career score. Uses a query but does NOT
@@ -17,6 +17,26 @@ export const useCareerScore = (targetRole: string) => {
 };
 
 /**
+ * Fetch historical career score snapshots for trend visualization.
+ */
+export const useScoreHistory = (targetRole?: string, days: number = 30) => {
+  return useQuery<CareerScoreHistory>({
+    queryKey: ['score-history', targetRole, days],
+    queryFn: () => analysisApi.getHistory(targetRole, days),
+  });
+};
+
+/**
+ * Fetch career growth metrics (7-day velocity delta, best dimension, benchmark gap).
+ */
+export const useCareerMetrics = (targetRole?: string) => {
+  return useQuery<CareerMetrics>({
+    queryKey: ['career-metrics', targetRole],
+    queryFn: () => analysisApi.getMetrics(targetRole),
+  });
+};
+
+/**
  * Manually trigger career score synthesis.
  * Updates the cache so useCareerScore consumers get the new data.
  */
@@ -26,6 +46,8 @@ export const useRefreshCareerScore = () => {
     mutationFn: (targetRole: string) => analysisApi.synthesize(targetRole),
     onSuccess: (data, targetRole) => {
       queryClient.setQueryData(['career-score', targetRole], data);
+      queryClient.invalidateQueries({ queryKey: ['score-history'] });
+      queryClient.invalidateQueries({ queryKey: ['career-metrics'] });
     },
   });
 };
@@ -39,6 +61,8 @@ export const useLinkedInAnalysis = (targetRole: string) => {
     mutationFn: () => analysisApi.analyzeLinkedIn(targetRole),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['career-score'] });
+      queryClient.invalidateQueries({ queryKey: ['score-history'] });
+      queryClient.invalidateQueries({ queryKey: ['career-metrics'] });
     },
   });
 };

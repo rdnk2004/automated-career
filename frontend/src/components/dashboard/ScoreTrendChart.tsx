@@ -11,8 +11,10 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { TrendingUp, Sparkles } from 'lucide-react';
+import { TrendingUp, Sparkles, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useScoreHistory, useCareerMetrics } from '@/hooks/useAnalysis';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 type TimeRange = '1W' | '1M' | '3M' | 'All';
 
@@ -23,6 +25,13 @@ interface SnapshotPoint {
   github: number;
   resume: number;
 }
+
+const timeRangeDays: Record<TimeRange, number> = {
+  '1W': 7,
+  '1M': 30,
+  '3M': 90,
+  'All': 365,
+};
 
 const baseSnapshots: Record<TimeRange, SnapshotPoint[]> = {
   '1W': [
@@ -55,49 +64,80 @@ const baseSnapshots: Record<TimeRange, SnapshotPoint[]> = {
 
 export function ScoreTrendChart({ currentScore }: { currentScore?: number }) {
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
+  const { targetRole } = useSettingsStore();
+
+  const days = timeRangeDays[timeRange];
+  const { data: history, isLoading } = useScoreHistory(targetRole, days);
+  const { data: metrics } = useCareerMetrics(targetRole);
 
   const chartData = useMemo(() => {
-    const data = baseSnapshots[timeRange];
-    if (currentScore && data.length > 0) {
-      // Align last point to live currentScore
-      const lastIdx = data.length - 1;
-      const updated = [...data];
-      updated[lastIdx] = {
-        ...updated[lastIdx],
-        score: currentScore,
-      };
-      return updated;
-    }
-    return data;
-  }, [timeRange, currentScore]);
+    if (history?.snapshots && history.snapshots.length >= 2) {
+      return history.snapshots.map((s) => {
+        const d = new Date(s.snapshotted_at);
+        const dateStr =
+          days <= 7
+            ? d.toLocaleDateString(undefined, { weekday: 'short' })
+            : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-  const initialScore = chartData[0]?.score || 50;
-  const latestScore = chartData[chartData.length - 1]?.score || 88;
-  const growth = Math.round(((latestScore - initialScore) / initialScore) * 100);
+        return {
+          date: dateStr,
+          score: s.overall_score,
+          linkedin: s.linkedin_score,
+          github: s.github_score,
+          resume: s.resume_match_score,
+        };
+      });
+    }
+
+    const fallback = baseSnapshots[timeRange];
+    if (currentScore !== undefined && fallback.length > 0) {
+      return fallback.map((pt, i) =>
+        i === fallback.length - 1 ? { ...pt, score: currentScore } : pt
+      );
+    }
+    return fallback;
+  }, [history, timeRange, currentScore, days]);
+
+  const hasRealHistory = (history?.snapshots?.length ?? 0) >= 2;
+  const growthDelta = metrics?.delta_7d ?? +6;
 
   return (
-    <Card className="col-span-2 glass-card border-border/50 shadow-xl overflow-hidden flex flex-col justify-between">
-      <div>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-3 border-b border-border/30">
-          <div>
+    <Card className="glass-card border-border/40 shadow-xl overflow-hidden rounded-3xl">
+      <CardHeader className="pb-2 border-b border-border/30 bg-secondary/30">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
             <CardTitle className="text-base font-bold font-heading flex items-center gap-2 text-foreground">
-              <div className="p-1.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                <TrendingUp className="h-4 w-4" />
-              </div>
-              Career Score Trajectory
+              <TrendingUp className="h-4.5 w-4.5 text-indigo-400" />
+              Career Readiness Trajectory
             </CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Historical progress & AI synthesis snapshots over time
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">
+                Composite readiness score progression over time
+              </p>
+              {hasRealHistory ? (
+                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 gap-1 py-0 px-2 font-mono">
+                  <Activity className="h-2.5 w-2.5" />
+                  Live History
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] bg-indigo-500/10 text-indigo-300 border-indigo-500/30 gap-1 py-0 px-2 font-mono">
+                  <Sparkles className="h-2.5 w-2.5" />
+                  Baseline Mode
+                </Badge>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-semibold px-2.5 py-1">
-              +{growth}% Trajectory
-            </Badge>
+            {growthDelta !== 0 && (
+              <Badge variant="success" className="text-xs font-bold gap-1 px-2.5 py-0.5 shadow-sm">
+                <TrendingUp className="h-3 w-3" />
+                {growthDelta > 0 ? `+${growthDelta}` : growthDelta} pts (7d)
+              </Badge>
+            )}
 
-            {/* Time range pills */}
-            <div className="flex items-center gap-1 p-1 bg-secondary/40 rounded-xl border border-border/40 text-[11px]">
+            {/* Time Range Selector */}
+            <div className="flex items-center gap-1 p-1 bg-secondary/50 rounded-xl border border-border/40 text-xs">
               {(['1W', '1M', '3M', 'All'] as TimeRange[]).map((range) => (
                 <button
                   key={range}
@@ -105,7 +145,7 @@ export function ScoreTrendChart({ currentScore }: { currentScore?: number }) {
                   className={cn(
                     'px-2.5 py-1 rounded-lg font-semibold transition-all select-none',
                     timeRange === range
-                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      ? 'bg-indigo-600 text-white shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
@@ -114,85 +154,102 @@ export function ScoreTrendChart({ currentScore }: { currentScore?: number }) {
               ))}
             </div>
           </div>
-        </CardHeader>
+        </div>
+      </CardHeader>
 
-        <CardContent className="h-[280px] pt-4 px-2 sm:px-6">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="scoreAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.06)" />
-              <XAxis
-                dataKey="date"
-                stroke="#94a3b8"
-                fontSize={11}
-                tickLine={false}
-                axisLine={false}
-                fontFamily="JetBrains Mono, monospace"
-              />
-              <YAxis
-                stroke="#94a3b8"
-                fontSize={11}
-                tickLine={false}
-                axisLine={false}
-                domain={[0, 100]}
-                fontFamily="JetBrains Mono, monospace"
-              />
-              <ReferenceLine
-                y={80}
-                stroke="#10b981"
-                strokeDasharray="4 4"
-                label={{
-                  value: 'Target Benchmark (80%)',
-                  fill: '#34d399',
-                  fontSize: 10,
-                  position: 'insideTopRight',
-                }}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgba(13, 20, 38, 0.95)',
-                  border: '1px solid rgba(99, 102, 241, 0.3)',
-                  borderRadius: '16px',
-                  boxShadow: '0 12px 36px -5px rgba(0,0,0,0.6)',
-                  padding: '10px 14px',
-                  fontSize: '12px',
-                  backdropFilter: 'blur(12px)',
-                }}
-                formatter={(value: any, name: any) => {
-                  if (name === 'score') return [`${value} / 100`, 'Overall Readiness'];
-                  return [`${value}%`, name];
-                }}
-                labelStyle={{ fontWeight: 700, color: '#f8fafc', marginBottom: 4 }}
-              />
-              <Area
-                type="monotone"
-                dataKey="score"
-                stroke="#818cf8"
-                strokeWidth={3}
-                fillOpacity={1}
-                fill="url(#scoreAreaGradient)"
-                dot={{ r: 4, fill: '#818cf8', strokeWidth: 2, stroke: '#0f172a' }}
-                activeDot={{ r: 6, fill: '#c7d2fe', strokeWidth: 2, stroke: '#fff' }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </div>
+      <CardContent className="p-6 pt-6">
+        <div className="h-[260px] w-full">
+          {isLoading ? (
+            <div className="h-full flex items-center justify-center text-muted-foreground text-xs font-mono">
+              Loading trajectory telemetry...
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="scoreAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.45} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
 
-      <div className="px-6 py-3 border-t border-border/30 bg-secondary/20 flex flex-wrap items-center justify-between gap-3 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-          Optimal threshold is 80+ for executive & staff candidate readiness
-        </span>
-        <span className="font-mono text-foreground font-semibold">
-          Current: {latestScore} / 100
-        </span>
-      </div>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.06)" vertical={false} />
+
+                <XAxis
+                  dataKey="date"
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={{ stroke: 'rgba(255, 255, 255, 0.1)' }}
+                />
+
+                <YAxis
+                  domain={[0, 100]}
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={{ stroke: 'rgba(255, 255, 255, 0.1)' }}
+                  ticks={[0, 25, 50, 75, 100]}
+                />
+
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="p-3.5 rounded-2xl glass-panel border border-indigo-500/30 shadow-2xl space-y-1.5 min-w-[170px] backdrop-blur-xl">
+                          <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
+                            <span className="text-[11px] font-mono text-muted-foreground">{data.date}</span>
+                            <span className="text-xs font-bold text-indigo-300 font-mono">
+                              {data.score}/100 Overall
+                            </span>
+                          </div>
+                          <div className="space-y-1 text-[11px] pt-0.5">
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>LinkedIn:</span>
+                              <span className="font-semibold text-foreground">{data.linkedin}%</span>
+                            </div>
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>GitHub:</span>
+                              <span className="font-semibold text-foreground">{data.github}%</span>
+                            </div>
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Resume:</span>
+                              <span className="font-semibold text-foreground">{data.resume}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+
+                <ReferenceLine
+                  y={85}
+                  stroke="#10b981"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: 'Interview Ready (85%)',
+                    fill: '#10b981',
+                    fontSize: 10,
+                    position: 'insideTopRight',
+                  }}
+                />
+
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#818cf8"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#scoreAreaGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </CardContent>
     </Card>
   );
 }

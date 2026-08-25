@@ -1,5 +1,11 @@
 import { api } from './api';
-import { CareerScore, SuggestionSet, ResumeSuggestion } from '../types/analysis';
+import {
+  CareerScore,
+  SuggestionSet,
+  ResumeSuggestion,
+  CareerScoreHistory,
+  CareerMetrics,
+} from '../types/analysis';
 
 export const analysisApi = {
   synthesize: async (targetRole: string): Promise<CareerScore> => {
@@ -14,6 +20,18 @@ export const analysisApi = {
     const res = await api.post('/api/analysis/resume', { resume_text: resumeText, target_role: targetRole });
     return res.data;
   },
+  getHistory: async (targetRole?: string, days: number = 30): Promise<CareerScoreHistory> => {
+    const res = await api.get('/api/analysis/history', {
+      params: { target_role: targetRole, days },
+    });
+    return res.data;
+  },
+  getMetrics: async (targetRole?: string): Promise<CareerMetrics> => {
+    const res = await api.get('/api/analysis/metrics', {
+      params: { target_role: targetRole },
+    });
+    return res.data;
+  },
   exportResumePdf: async (payload: {
     name?: string;
     target_role: string;
@@ -25,7 +43,7 @@ export const analysisApi = {
     certifications?: string[];
   }): Promise<void> => {
     const res = await api.post('/api/analysis/resume/export-pdf', payload, {
-      responseType: 'blob'
+      responseType: 'blob',
     });
     const blob = new Blob([res.data], { type: 'application/pdf' });
     const url = window.URL.createObjectURL(blob);
@@ -37,5 +55,5 @@ export const analysisApi = {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
-  }
+  },
 };

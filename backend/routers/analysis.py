@@ -1,6 +1,7 @@
 import json
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Request, Response
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, HTTPException, Depends, Request, Response, Query
 from limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -11,7 +12,14 @@ from models.profile import UserProfile, ProfileSection
 from models.github import GithubRepo
 from models.jobs import JDKeyword
 from models.suggestions import SuggestionLog, CareerScoreSnapshot
-from schemas.analysis import SuggestionSetResponse, CareerScoreResponse, ResumeSuggestionResponse
+from schemas.analysis import (
+    SuggestionSetResponse,
+    CareerScoreResponse,
+    ResumeSuggestionResponse,
+    ScoreSnapshotItem,
+    CareerScoreHistoryResponse,
+    CareerMetricsResponse,
+)
 
 from agents.linkedin_agent import analyze as analyze_linkedin_agent
 from agents.resume_agent import analyze as analyze_resume_agent
@@ -41,8 +49,6 @@ class ResumeExportPDFRequest(BaseModel):
     skills: Optional[List[str]] = Field(default_factory=list)
     education: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     certifications: Optional[List[str]] = Field(default_factory=list)
-
-
 
 class SynthesisRequest(BaseModel):
     target_role: str = Field(..., min_length=1, max_length=200)
@@ -181,3 +187,109 @@ async def analyze_synthesis(request: Request, req: SynthesisRequest, db: AsyncSe
 
     await save_suggestion_log(db, "synthesis", {"target_role": req.target_role}, json.dumps(career_score.model_dump()))
     return career_score
+
+
+@router.get("/history", response_model=CareerScoreHistoryResponse)
+async def get_score_history(
+    target_role: Optional[str] = Query(None, description="Filter snapshots by target role"),
+    days: int = Query(30, ge=1, le=365, description="Number of days of history"),
+    limit: int = Query(50, ge=1, le=200, description="Max snapshots to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Retrieve historical career score snapshots for trend visualization.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    query = select(CareerScoreSnapshot).where(CareerScoreSnapshot.snapshotted_at >= cutoff)
+    if target_role:
+        query = query.where(CareerScoreSnapshot.target_role == target_role)
+    query = query.order_by(CareerScoreSnapshot.snapshotted_at.asc()).limit(limit)
+
+    result = await db.execute(query)
+    rows = result.scalars().all()
+
+    snapshots = [
+        ScoreSnapshotItem(
+            id=row.id,
+            snapshotted_at=row.snapshotted_at,
+            linkedin_score=row.linkedin_score or 0,
+            github_score=row.github_score or 0,
+            resume_match_score=row.resume_match_score or 0,
+            overall_score=row.overall_score or 0,
+            target_role=row.target_role
+        )
+        for row in rows
+    ]
+
+    return CareerScoreHistoryResponse(
+        target_role=target_role,
+        timeframe_days=days,
+        total_snapshots=len(snapshots),
+        snapshots=snapshots
+    )
+
+
+@router.get("/metrics", response_model=CareerMetricsResponse)
+async def get_career_metrics(
+    target_role: Optional[str] = Query(None, description="Target career role"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate rolling 7-day delta, best dimension, and target benchmark indicators.
+    """
+    query = select(CareerScoreSnapshot)
+    if target_role:
+        query = query.where(CareerScoreSnapshot.target_role == target_role)
+    query = query.order_by(CareerScoreSnapshot.snapshotted_at.desc()).limit(10)
+
+    result = await db.execute(query)
+    snapshots = result.scalars().all()
+
+    if not snapshots:
+        # Graceful default when no analysis has been executed yet
+        return CareerMetricsResponse(
+            current_overall=0,
+            previous_overall=0,
+            delta_7d=0,
+            current_linkedin=0,
+            current_github=0,
+            current_resume=0,
+            best_dimension="None",
+            target_role=target_role,
+            market_benchmark_gap=85,
+            snapshotted_at=None
+        )
+
+    latest = snapshots[0]
+    current_overall = latest.overall_score or 0
+    current_linkedin = latest.linkedin_score or 0
+    current_github = latest.github_score or 0
+    current_resume = latest.resume_match_score or 0
+
+    # Determine previous snapshot (from ~7 days ago or earliest recent snapshot)
+    previous_overall = snapshots[-1].overall_score or current_overall if len(snapshots) > 1 else current_overall
+    delta_7d = current_overall - previous_overall
+
+    # Determine best performing dimension
+    dims = [
+        ("LinkedIn", current_linkedin),
+        ("GitHub Portfolio", current_github),
+        ("Resume Match", current_resume)
+    ]
+    best_dimension = max(dims, key=lambda d: d[1])[0] if any(d[1] > 0 for d in dims) else "Balanced"
+
+    market_benchmark_gap = max(0, 85 - current_overall)
+
+    return CareerMetricsResponse(
+        current_overall=current_overall,
+        previous_overall=previous_overall,
+        delta_7d=delta_7d,
+        current_linkedin=current_linkedin,
+        current_github=current_github,
+        current_resume=current_resume,
+        best_dimension=best_dimension,
+        target_role=target_role or latest.target_role,
+        market_benchmark_gap=market_benchmark_gap,
+        snapshotted_at=latest.snapshotted_at
+    )
