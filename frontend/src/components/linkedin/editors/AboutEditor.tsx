@@ -1,6 +1,5 @@
-import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Clock, Sparkles } from 'lucide-react';
+import { Clock, Sparkles } from 'lucide-react';
 
 interface AboutContent {
   summary?: string;
