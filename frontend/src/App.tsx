@@ -56,6 +56,8 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+import { ToastContainer } from '@/components/ui/toast';
+
 // --- App ---
 function App() {
   return (
@@ -69,6 +71,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </AppShell>
+      <ToastContainer />
     </ErrorBoundary>
   );
 }
