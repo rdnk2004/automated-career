@@ -19,23 +19,19 @@ export function RepoHealthBadge({ score }: { score?: number | null }) {
   }
 
   let colorClass = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
-  let label = 'Flawless';
   let Icon = CheckCircle2;
   let tooltipText = `Health Score: ${score}/100. Repository has README, no leaked credentials, and clean structure.`;
 
   if (score <= 50) {
     colorClass = 'bg-rose-500/15 text-rose-300 border-rose-500/30';
-    label = 'Critical';
     Icon = ShieldAlert;
     tooltipText = `Health Score: ${score}/100. Action required: Potential leaked secrets or missing .gitignore/.env risk detected.`;
   } else if (score <= 75) {
     colorClass = 'bg-amber-500/15 text-amber-300 border-amber-500/30';
-    label = 'Action Needed';
     Icon = AlertTriangle;
     tooltipText = `Health Score: ${score}/100. Missing README or low documentation quality.`;
   } else if (score < 90) {
     colorClass = 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30';
-    label = 'Good';
     Icon = Sparkles;
     tooltipText = `Health Score: ${score}/100. Good quality, minor improvements suggested.`;
   }

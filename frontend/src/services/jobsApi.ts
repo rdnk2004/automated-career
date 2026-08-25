@@ -2,8 +2,8 @@ import { api } from './api';
 import { JobListing, JDKeyword } from '../types/jobs';
 
 export const jobsApi = {
-  searchJobs: async (title: string, limit: number = 30): Promise<JobListing[]> => {
-    const res = await api.get('/api/jobs/search', { params: { title, limit } });
+  searchJobs: async (title: string, location: string = 'remote', limit: number = 30): Promise<JobListing[]> => {
+    const res = await api.get('/api/jobs/search', { params: { title, location, limit } });
     return res.data;
   },
   getKeywords: async (title: string): Promise<JDKeyword[]> => {

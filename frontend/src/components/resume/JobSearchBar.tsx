@@ -11,8 +11,6 @@ import {
   Target,
   Briefcase,
   MapPin,
-  History,
-  X,
 } from 'lucide-react';
 
 export function JobSearchBar() {
@@ -21,7 +19,6 @@ export function JobSearchBar() {
     setActiveTitle,
     activeLocation,
     setActiveLocation,
-    searchHistory,
   } = useJobStore();
 
   const [titleInput, setTitleInput] = useState(activeTitle);

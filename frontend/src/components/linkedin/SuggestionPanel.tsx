@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { SuggestionSet } from '@/types/analysis';
 import { KeywordGapBadges } from './KeywordGapBadges';
 import ReactDiffViewer from 'react-diff-viewer-continued';
-import { useImportLinkedIn, useProfile, useUpdateSection } from '@/hooks/useProfile';
+import { useImportLinkedIn, useProfile } from '@/hooks/useProfile';
 import { useProfileStore } from '@/stores/profileStore';
 import { toast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,6 @@ export function SuggestionPanel({
   const [splitView, setSplitView] = useState(false);
   const { mutate: importProfile, isPending: isImporting } = useImportLinkedIn();
   const { data: profile } = useProfile();
-  const { mutate: updateSection } = useUpdateSection();
   const { setDraftContent } = useProfileStore();
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [appliedIndices, setAppliedIndices] = useState<Set<number>>(new Set());

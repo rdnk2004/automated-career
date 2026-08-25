@@ -15,7 +15,6 @@ import {
   Check,
   Award,
   FileCode,
-  CheckCircle2,
   TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

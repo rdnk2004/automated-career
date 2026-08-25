@@ -12,7 +12,6 @@ import {
   FolderGit2,
   ExternalLink,
   ShieldAlert,
-  FileText,
   Search,
   ArrowUpDown,
   ArrowUp,
@@ -41,7 +40,7 @@ export function RepoHealthTable({
   repos: GithubRepo[];
   onSelectRepo: (repo: GithubRepo) => void;
   selectedRepoId: string | null;
-  selectedRepoFullNames: Set<string>;
+  selectedRepoFullNames: string[] | Set<string>;
   onToggleSelect: (fullName: string) => void;
   onToggleSelectAll: () => void;
   onClearSelection?: () => void;
@@ -149,11 +148,24 @@ export function RepoHealthTable({
     }
   };
 
+  const isRepoSelected = (fullName: string) =>
+    Array.isArray(selectedRepoFullNames)
+      ? selectedRepoFullNames.includes(fullName)
+      : selectedRepoFullNames.has(fullName);
+
+  const selectedCount = Array.isArray(selectedRepoFullNames)
+    ? selectedRepoFullNames.length
+    : selectedRepoFullNames.size;
+
+  const selectedList = Array.isArray(selectedRepoFullNames)
+    ? selectedRepoFullNames
+    : Array.from(selectedRepoFullNames);
+
   const allVisibleSelected =
     filteredAndSortedRepos.length > 0 &&
-    filteredAndSortedRepos.every((r) => selectedRepoFullNames.has(r.full_name));
+    filteredAndSortedRepos.every((r) => isRepoSelected(r.full_name));
   const someVisibleSelected =
-    filteredAndSortedRepos.some((r) => selectedRepoFullNames.has(r.full_name)) && !allVisibleSelected;
+    filteredAndSortedRepos.some((r) => isRepoSelected(r.full_name)) && !allVisibleSelected;
 
   if (!repos || repos.length === 0) {
     return (
@@ -325,7 +337,7 @@ export function RepoHealthTable({
 
             <tbody className="divide-y divide-border/30">
               {filteredAndSortedRepos.map((repo) => {
-                const isSelected = selectedRepoFullNames.has(repo.full_name);
+                const isSelected = isRepoSelected(repo.full_name);
                 const isCurrentActive = selectedRepoId === repo.id;
 
                 return (
@@ -434,14 +446,14 @@ export function RepoHealthTable({
       </div>
 
       {/* Floating Bottom Batch Action Bar */}
-      {selectedRepoFullNames.size > 0 && onBatchScan && (
+      {selectedCount > 0 && onBatchScan && (
         <div className="sticky bottom-4 z-20 flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-slate-950/90 border border-indigo-500/40 shadow-2xl backdrop-blur-xl animate-slide-up">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-xl bg-indigo-500/20 text-indigo-400">
               <Sparkles className="h-4 w-4" />
             </div>
             <span className="text-xs font-bold text-foreground">
-              {selectedRepoFullNames.size} {selectedRepoFullNames.size === 1 ? 'repository' : 'repositories'} selected
+              {selectedCount} {selectedCount === 1 ? 'repository' : 'repositories'} selected
             </span>
           </div>
 
@@ -460,11 +472,11 @@ export function RepoHealthTable({
             <Button
               size="sm"
               isLoading={isBatchScanning}
-              onClick={() => onBatchScan(Array.from(selectedRepoFullNames))}
+              onClick={() => onBatchScan(selectedList)}
               className="h-8 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 gap-1.5 rounded-xl"
             >
               <ShieldAlert className="h-3.5 w-3.5" />
-              Batch Scan Security ({selectedRepoFullNames.size})
+              Batch Scan Security ({selectedCount})
             </Button>
           </div>
         </div>

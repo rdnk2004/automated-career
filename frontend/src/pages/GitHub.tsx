@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useRepos, useSyncRepos, useScanRepo, useScanBatchRepos } from '@/hooks/useGithubRepos';
 import { useGithubStore } from '@/stores/githubStore';
 import { toast } from '@/hooks/useToast';
@@ -25,13 +24,13 @@ import { cn } from '@/lib/utils';
 export default function GitHub() {
   const {
     selectedRepoId,
-    setSelectedRepoId,
+    setSelectedRepo,
     selectedRepoFullNames,
-    toggleRepoSelection,
+    toggleSelectRepo,
     selectAllRepos,
     clearSelectedRepos,
-    activeTab,
-    setActiveTab,
+    studioTab,
+    setStudioTab,
   } = useGithubStore();
 
   const { data: repos, isLoading } = useRepos();
@@ -70,12 +69,12 @@ export default function GitHub() {
   };
 
   const handleSelectRepo = (repo: GithubRepo) => {
-    setSelectedRepoId(repo.id);
+    setSelectedRepo(repo.id, repo.full_name);
   };
 
   const allRepoNames = (repos || []).map((r) => r.full_name);
   const handleToggleSelectAll = () => {
-    const allSelected = allRepoNames.length > 0 && allRepoNames.every((n) => selectedRepoFullNames.has(n));
+    const allSelected = allRepoNames.length > 0 && allRepoNames.every((n) => selectedRepoFullNames.includes(n));
     if (allSelected) {
       clearSelectedRepos();
     } else {
@@ -121,7 +120,7 @@ export default function GitHub() {
               onSelectRepo={handleSelectRepo}
               selectedRepoId={selectedRepoId}
               selectedRepoFullNames={selectedRepoFullNames}
-              onToggleSelect={toggleRepoSelection}
+              onToggleSelect={toggleSelectRepo}
               onToggleSelectAll={handleToggleSelectAll}
               onClearSelection={clearSelectedRepos}
               onBatchScan={handleBatchScan}
@@ -201,10 +200,10 @@ export default function GitHub() {
             {/* Inspector Navigation Tabs */}
             <div className="flex items-center gap-1.5 p-1 bg-secondary/30 rounded-2xl border border-border/40 text-xs">
               <button
-                onClick={() => setActiveTab('security')}
+                onClick={() => setStudioTab('security')}
                 className={cn(
                   'flex items-center gap-2 px-4 py-2 font-semibold rounded-xl transition-all select-none',
-                  activeTab === 'security'
+                  studioTab === 'security' || studioTab === 'overview'
                     ? 'bg-primary text-primary-foreground shadow-md'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
@@ -214,10 +213,10 @@ export default function GitHub() {
               </button>
 
               <button
-                onClick={() => setActiveTab('readme')}
+                onClick={() => setStudioTab('readme')}
                 className={cn(
                   'flex items-center gap-2 px-4 py-2 font-semibold rounded-xl transition-all select-none',
-                  activeTab === 'readme'
+                  studioTab === 'readme'
                     ? 'bg-primary text-primary-foreground shadow-md'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
@@ -228,14 +227,11 @@ export default function GitHub() {
             </div>
 
             {/* Tab Views */}
-            {activeTab === 'security' && (
-              <SecurityScanPanel
-                scan={selectedRepo.latest_scan}
-                repoFullName={selectedRepo.full_name}
-              />
+            {(studioTab === 'security' || studioTab === 'overview') && (
+              <SecurityScanPanel scan={selectedRepo.latest_scan} />
             )}
 
-            {activeTab === 'readme' && (
+            {studioTab === 'readme' && (
               <ReadmeGenerator
                 repoFullName={selectedRepo.full_name}
                 hasReadme={selectedRepo.has_readme}

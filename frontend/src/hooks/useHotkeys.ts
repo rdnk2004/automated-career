@@ -63,8 +63,6 @@ export function useHotkeys(
           (k) => !['ctrl', 'control', 'meta', 'cmd', 'command', 'shift', 'alt', 'option'].includes(k)
         );
 
-        const matchCtrl = hasCtrl ? e.ctrlKey : true;
-        const matchMeta = hasMeta ? e.metaKey : true;
         const matchShift = hasShift ? e.shiftKey : !e.shiftKey || hasShift;
         const matchAlt = hasAlt ? e.altKey : !e.altKey || hasAlt;
 

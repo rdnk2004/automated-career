@@ -2,8 +2,7 @@ import { useState, useMemo } from 'react';
 import { useJobKeywords } from '@/hooks/useJobSearch';
 import { useJobStore } from '@/stores/jobStore';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Cloud, Sparkles, Search, Tag, Cpu, Layers } from 'lucide-react';
+import { Cloud, Sparkles, Search, Cpu, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function JDKeywordCloud() {

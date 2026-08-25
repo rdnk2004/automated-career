@@ -12,16 +12,13 @@ import {
   Copy,
   Check,
   Terminal,
-  CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function SecurityScanPanel({
   scan,
-  repoFullName,
 }: {
   scan?: RepoScan;
-  repoFullName?: string;
 }) {
   const [copiedCmd, setCopiedCmd] = useState(false);
   const [copiedSecretIdx, setCopiedSecretIdx] = useState<number | null>(null);
