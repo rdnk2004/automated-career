@@ -16,7 +16,7 @@ class ProfileSectionResponse(BaseModel):
     content: Dict[str, Any]
     ai_score: Optional[int] = None
     scored_at: Optional[datetime] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -35,3 +35,24 @@ class UserProfileResponse(BaseModel):
 class LinkedInImportResponse(BaseModel):
     imported: bool
     sections_count: int
+
+class ApplySuggestionRequest(BaseModel):
+    section_type: str
+    suggested_content: Any
+    title: Optional[str] = None
+    suggestion_id: Optional[UUID] = None
+
+class ApplySuggestionResponse(BaseModel):
+    applied: bool
+    section_type: str
+    updated_section: ProfileSectionResponse
+    message: str
+
+class SectionScoreBreakdown(BaseModel):
+    section_type: str
+    title: Optional[str] = None
+    overall_score: int
+    impact_score: int
+    keyword_score: int
+    clarity_score: int
+    deductions: List[str] = []
