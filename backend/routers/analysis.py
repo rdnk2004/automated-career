@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException, Depends, Request, Response, Query
+from fastapi import APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Form
 from limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -19,12 +19,14 @@ from schemas.analysis import (
     ScoreSnapshotItem,
     CareerScoreHistoryResponse,
     CareerMetricsResponse,
+    ParsedResumeResponse,
 )
 
 from agents.linkedin_agent import analyze as analyze_linkedin_agent
 from agents.resume_agent import analyze as analyze_resume_agent
 from agents.synthesis_agent import synthesize as synthesize_agent
 from services.pdf_service import pdf_export_service
+from services.resume_parser_service import resume_parser_service
 
 from pydantic import BaseModel, Field
 
@@ -126,6 +128,33 @@ async def analyze_resume(request: Request, req: ResumeAnalysisRequest, db: Async
     return suggestion
 
 
+@router.post("/resume/upload", response_model=ParsedResumeResponse)
+@limiter.limit("10/minute")
+async def upload_and_parse_resume(
+    request: Request,
+    file: UploadFile = File(...),
+    target_role: Optional[str] = Form(None)
+):
+    """
+    Ingest binary PDF/TXT resume, extract text, and parse into structured ATS resume sections.
+    """
+    filename = file.filename or "resume.pdf"
+    if not (filename.lower().endswith(".pdf") or filename.lower().endswith(".txt")):
+        raise HTTPException(status_code=400, detail="Only .pdf and .txt resume files are supported")
+
+    content = await file.read()
+    MAX_SIZE = 10 * 1024 * 1024  # 10MB
+    if len(content) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+
+    try:
+        parsed = await resume_parser_service.parse_resume(content, filename, target_role)
+        return ParsedResumeResponse.model_validate(parsed)
+    except Exception as e:
+        logger.error(f"Failed to parse resume {filename}: {e}")
+        raise HTTPException(status_code=500, detail=f"Resume parsing failed: {e}")
+
+
 @router.post("/resume/export-pdf")
 @limiter.limit("10/minute")
 async def export_resume_pdf(request: Request, req: ResumeExportPDFRequest):
@@ -196,9 +225,6 @@ async def get_score_history(
     limit: int = Query(50, ge=1, le=200, description="Max snapshots to return"),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Retrieve historical career score snapshots for trend visualization.
-    """
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     
     query = select(CareerScoreSnapshot).where(CareerScoreSnapshot.snapshotted_at >= cutoff)
@@ -235,9 +261,6 @@ async def get_career_metrics(
     target_role: Optional[str] = Query(None, description="Target career role"),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Calculate rolling 7-day delta, best dimension, and target benchmark indicators.
-    """
     query = select(CareerScoreSnapshot)
     if target_role:
         query = query.where(CareerScoreSnapshot.target_role == target_role)
@@ -247,7 +270,6 @@ async def get_career_metrics(
     snapshots = result.scalars().all()
 
     if not snapshots:
-        # Graceful default when no analysis has been executed yet
         return CareerMetricsResponse(
             current_overall=0,
             previous_overall=0,
@@ -267,11 +289,9 @@ async def get_career_metrics(
     current_github = latest.github_score or 0
     current_resume = latest.resume_match_score or 0
 
-    # Determine previous snapshot (from ~7 days ago or earliest recent snapshot)
     previous_overall = snapshots[-1].overall_score or current_overall if len(snapshots) > 1 else current_overall
     delta_7d = current_overall - previous_overall
 
-    # Determine best performing dimension
     dims = [
         ("LinkedIn", current_linkedin),
         ("GitHub Portfolio", current_github),

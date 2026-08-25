@@ -11,6 +11,7 @@ python-multipart==0.0.9
 aiofiles==24.1.0
 slowapi
 reportlab==5.0.0
+pypdf
 pytest
 pytest-asyncio
 pytest-mock

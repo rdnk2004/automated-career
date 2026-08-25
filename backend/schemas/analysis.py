@@ -64,3 +64,14 @@ class CareerMetricsResponse(BaseModel):
     target_role: Optional[str] = None
     market_benchmark_gap: int
     snapshotted_at: Optional[datetime] = None
+
+class ParsedResumeResponse(BaseModel):
+    name: Optional[str] = "Candidate"
+    contact: Dict[str, str] = {}
+    summary: Optional[str] = ""
+    experience: List[Dict[str, Any]] = []
+    skills: List[str] = []
+    education: List[Dict[str, Any]] = []
+    certifications: List[str] = []
+    raw_text: str
+    word_count: int
