@@ -16,6 +16,10 @@ import {
   Eye,
   Code,
   FileDiff,
+  Network,
+  Briefcase,
+  Terminal,
+  FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,21 +36,28 @@ export function ReadmeGenerator({
   const { mutate: pushReadme, isPending: isPushing } = usePushReadme();
   const [markdown, setMarkdown] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'preview' | 'source' | 'diff'>('preview');
+  const [readmeStyle, setReadmeStyle] = useState<'recruiter' | 'developer' | 'research'>('recruiter');
   const [pushed, setPushed] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleGenerate = () => {
-    toast.ai('Generating Professional README...', `Analyzing file tree and codebase for ${repoFullName}`);
-    generateReadme(repoFullName, {
-      onSuccess: (data: { readme_markdown: string }) => {
-        setMarkdown(data.readme_markdown);
-        setPushed(false);
-        toast.success('README Generated!', 'Review and customize the README below');
-      },
-      onError: (err: any) => {
-        toast.error('README Generation Failed', err?.message);
-      },
-    });
+  const handleGenerate = (selectedStyle: 'recruiter' | 'developer' | 'research' = readmeStyle) => {
+    toast.ai(
+      'Generating Architecture-Rich README...',
+      `Synthesizing ${selectedStyle} README with Mermaid diagrams for ${repoFullName}`
+    );
+    generateReadme(
+      { repoFullName, style: selectedStyle },
+      {
+        onSuccess: (data: { readme_markdown: string }) => {
+          setMarkdown(data.readme_markdown);
+          setPushed(false);
+          toast.success('README Generated!', 'Includes Mermaid architecture diagram & tech stack table');
+        },
+        onError: (err: any) => {
+          toast.error('README Generation Failed', err?.message);
+        },
+      }
+    );
   };
 
   const handlePush = () => {
@@ -89,42 +100,98 @@ export function ReadmeGenerator({
   };
 
   return (
-    <div className="space-y-4 p-5 sm:p-6 rounded-2xl glass-card border border-border/40 shadow-2xl">
-      {/* Studio Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/30 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <FileText className="h-4 w-4" />
+    <div className="space-y-4 p-5 sm:p-6 rounded-2xl glass-card border border-border/40 shadow-2xl animate-fade-in">
+      {/* Studio Header & Style Presets */}
+      <div className="space-y-3 border-b border-border/30 pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                <FileText className="h-4 w-4" />
+              </div>
+              <h3 className="font-bold text-sm font-heading text-foreground">AI README Studio</h3>
             </div>
-            <h3 className="font-bold text-sm font-heading text-foreground">AI README Studio</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Generates production-grade READMEs with Mermaid architecture flowcharts, shields badges & tech matrices
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Generate architecture badges, installation guides, tech stack tables, and code snippets
-          </p>
+
+          <Button
+            onClick={() => handleGenerate(readmeStyle)}
+            disabled={isGenerating}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 rounded-xl px-4 h-9 text-xs font-semibold gap-1.5 shrink-0"
+          >
+            <Sparkles className={`h-3.5 w-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
+            {isGenerating ? 'Synthesizing...' : markdown ? 'Regenerate' : 'Generate Elite README'}
+          </Button>
         </div>
 
-        <Button
-          onClick={handleGenerate}
-          disabled={isGenerating}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 rounded-xl px-4 h-9 text-xs font-semibold gap-1.5 shrink-0"
-        >
-          <Sparkles className={`h-3.5 w-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
-          {isGenerating ? 'Synthesizing README...' : markdown ? 'Regenerate README' : 'Generate README'}
-        </Button>
+        {/* Preset Style Buttons */}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <span className="text-[11px] text-muted-foreground font-mono">Style Preset:</span>
+          <div className="flex items-center gap-1 p-0.5 bg-slate-900 rounded-xl border border-border/40 text-xs">
+            <button
+              onClick={() => {
+                setReadmeStyle('recruiter');
+                if (markdown) handleGenerate('recruiter');
+              }}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold transition-all select-none text-[11px]',
+                readmeStyle === 'recruiter'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Briefcase className="h-3 w-3" />
+              Recruiter Showcase
+            </button>
+
+            <button
+              onClick={() => {
+                setReadmeStyle('developer');
+                if (markdown) handleGenerate('developer');
+              }}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold transition-all select-none text-[11px]',
+                readmeStyle === 'developer'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Terminal className="h-3 w-3" />
+              Developer & OSS
+            </button>
+
+            <button
+              onClick={() => {
+                setReadmeStyle('research');
+                if (markdown) handleGenerate('research');
+              }}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold transition-all select-none text-[11px]',
+                readmeStyle === 'research'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <FlaskConical className="h-3 w-3" />
+              Research & AI
+            </button>
+          </div>
+        </div>
       </div>
 
       {!markdown && (
         <div className="p-8 text-center text-muted-foreground glass-card rounded-2xl border border-dashed border-border/40 text-xs space-y-3">
-          <Sparkles className="h-8 w-8 text-indigo-400/50 mx-auto animate-pulse" />
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto border border-indigo-500/20 shadow-glow">
+            <Network className="h-6 w-6" />
+          </div>
           <div className="space-y-1">
             <h4 className="font-bold font-heading text-foreground text-sm">
-              {hasReadme ? 'Existing README Detected' : 'No README Found in Repository'}
+              {hasReadme ? 'Existing README Detected' : 'No README in Repository'}
             </h4>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-              {hasReadme
-                ? 'Generate a comprehensive, recruiter-ready replacement with badges, installation instructions, and architecture diagrams.'
-                : 'Click "Generate README" to automatically inspect the codebase and author a professional README.md.'}
+              Click <strong>"Generate Elite README"</strong> to automatically inspect the codebase, synthesize a Mermaid architecture diagram, and construct a recruiter-ready project showcase.
             </p>
           </div>
         </div>
@@ -185,7 +252,7 @@ export function ReadmeGenerator({
                 className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
               >
                 {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? 'Copied' : 'Copy Markdown'}
               </Button>
 
               <Button
@@ -236,7 +303,10 @@ export function ReadmeGenerator({
               <Badge variant="outline" className="text-[10px] font-mono bg-indigo-500/10 text-indigo-300 border-indigo-500/20">
                 {markdown.split('\n').length} Lines
               </Badge>
-              <span className="text-[11px] text-muted-foreground">Ready to deploy to master branch</span>
+              <Badge variant="outline" className="text-[10px] font-mono bg-purple-500/10 text-purple-300 border-purple-500/20 flex items-center gap-1">
+                <Network className="h-3 w-3" />
+                <span>Mermaid Architecture</span>
+              </Badge>
             </div>
 
             <Button

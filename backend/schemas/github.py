@@ -64,6 +64,10 @@ class GithubRepoResponse(BaseModel):
 class RepoScanRequest(BaseModel):
     repo_full_name: str
 
+class GenerateReadmeRequest(BaseModel):
+    repo_full_name: str
+    style: Optional[Literal['recruiter', 'developer', 'research']] = 'recruiter'
+
 class BatchScanRequest(BaseModel):
     repo_full_names: List[str]
 

@@ -147,9 +147,25 @@ def _heuristic_evaluate_project(repo_data: dict, file_tree: str) -> Dict[str, An
     }
 
 
-async def generate_readme(repo_data: dict, file_tree: str, sample_code: str) -> str:
+async def generate_readme(
+    repo_data: dict,
+    file_tree: str,
+    sample_code: str,
+    style: str = "recruiter"
+) -> str:
+    """
+    Generate an elite README with Mermaid diagrams customized by style.
+    """
+    style_instruction = {
+        "recruiter": "Style: Recruiter Showcase. Highlight business impact, system architecture diagram, key features, technology badges, and clean setup.",
+        "developer": "Style: Developer / Open Source. Provide full technical specifications, Mermaid architecture & dataflow diagrams, API routes table, environment configuration, testing, and contribution guides.",
+        "research": "Style: Research & AI System. Emphasize problem formulation, architecture pipeline diagram, benchmark evaluation results table, reproducibility instructions, and BibTeX citation."
+    }.get(style, "Style: Recruiter Showcase.")
+
     prompt = f"""
 Generate an elite, production-grade README.md for this GitHub repository.
+
+{style_instruction}
 
 REPO METADATA:
 - Name: {repo_data.get('name', '')}
@@ -165,10 +181,13 @@ SAMPLE CODE EXCERPT:
 
 README REQUIREMENTS:
 1. Top Header: Modern project title, one-line value proposition, technology badges (Shields.io style).
-2. Architecture & Design: Include a clean Mermaid flowchart / sequence diagram visualizing the system architecture:
+2. Architecture & Design: Include a clean Mermaid flowchart visualizing the system architecture:
 ```mermaid
 graph TD
-  ...
+  User([User / Client]) --> Frontend[React / Vite Interface]
+  Frontend --> API[FastAPI Backend Service]
+  API --> Database[(PostgreSQL Engine)]
+  API --> AI[Gemini 2.5 Pro Engine]
 ```
 3. Key Features: Bulleted highlights inferred from actual code.
 4. Tech Stack Table: Categories (Frontend, Backend, Database, DevOps, AI) with notes.
@@ -179,14 +198,90 @@ graph TD
 
 Format: Valid Markdown only. No conversational wrapper or explanations outside the README content.
 """
-    response_text = await gemini_service.generate_async(prompt)
-    
-    text = response_text.strip()
-    if text.startswith("```markdown"):
-        text = text[len("```markdown"):]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-        
-    return text.strip()
+    try:
+        response_text = await gemini_service.generate_async(prompt)
+        text = response_text.strip()
+        if text.startswith("```markdown"):
+            text = text[len("```markdown"):]
+        elif text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        return text.strip()
+    except Exception as e:
+        logger.warning(f"Gemini README generation failed ({e}), using heuristic generator.")
+        return _heuristic_generate_readme(repo_data, file_tree)
+
+
+def _heuristic_generate_readme(repo_data: dict, file_tree: str) -> str:
+    name = repo_data.get("name", "Project")
+    desc = repo_data.get("description") or f"High-performance {repo_data.get('language', 'software')} application."
+    lang = repo_data.get("language") or "Python"
+
+    return f"""# {name}
+
+> {desc}
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Language](https://img.shields.io/badge/Language-{lang}-blue.svg)]()
+[![Status](https://img.shields.io/badge/Status-Production--Ready-emerald.svg)]()
+
+---
+
+## 🏛️ System Architecture
+
+```mermaid
+graph TD
+    Client([User Client]) --> App[{name} Core Engine]
+    App --> Modules[Domain Business Logic]
+    App --> Data[(Storage & State)]
+```
+
+---
+
+## ✨ Features
+
+- **Modular Architecture**: Clean separation of concerns designed for extensibility.
+- **Asynchronous Execution**: Optimized throughput and low latency data processing.
+- **Production-Ready Configuration**: Automated scripts for local testing and containerized deployments.
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technology |
+| :--- | :--- |
+| **Primary Language** | `{lang}` |
+| **Architecture** | Modular Clean Architecture |
+| **Configuration** | Environment-driven variables |
+
+---
+
+## 📂 Project Structure
+
+```
+{name}/
+├── src/ / app/       ← Application source files
+├── tests/            ← Automated test suites
+└── README.md         ← Project documentation
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- `{lang}` installed on your local system
+- Git
+
+### Installation
+```bash
+git clone https://github.com/{repo_data.get('full_name', name)}.git
+cd {name}
+```
+
+---
+
+## 📄 License
+This project is licensed under the **MIT License**.
+"""

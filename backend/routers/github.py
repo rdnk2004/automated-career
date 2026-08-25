@@ -14,6 +14,7 @@ from schemas.github import (
     GithubRepoResponse,
     RepoScanResponse,
     RepoScanRequest,
+    GenerateReadmeRequest,
     BatchScanRequest,
     TaskStatusResponse,
     RemediateRepoRequest,
@@ -370,7 +371,7 @@ async def scan_repo_alias(req: RepoScanRequest, db: AsyncSession = Depends(get_d
 
 
 @router.post("/readme/generate")
-async def generate_repo_readme(req: RepoScanRequest, db: AsyncSession = Depends(get_db)):
+async def generate_repo_readme(req: GenerateReadmeRequest, db: AsyncSession = Depends(get_db)):
     """
     Generate an elite README with Mermaid architecture diagrams based on actual code.
     """
@@ -388,9 +389,11 @@ async def generate_repo_readme(req: RepoScanRequest, db: AsyncSession = Depends(
             "description": repo.description,
             "language": repo.language,
             "topics": repo.topics or [],
+            "full_name": repo.full_name,
         },
         file_tree=code_info.get("file_tree", ""),
         sample_code=code_info.get("sample_code", ""),
+        style=req.style or "recruiter",
     )
 
     log = SuggestionLog(

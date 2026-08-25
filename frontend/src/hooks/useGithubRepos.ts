@@ -70,7 +70,11 @@ export const useScanBatchRepos = () => {
 
 export const useGenerateReadme = () => {
   return useMutation({
-    mutationFn: (repoFullName: string) => githubApi.generateReadme(repoFullName)
+    mutationFn: (payload: { repoFullName: string; style?: string } | string) => {
+      const repoFullName = typeof payload === 'string' ? payload : payload.repoFullName;
+      const style = typeof payload === 'string' ? 'recruiter' : (payload.style || 'recruiter');
+      return githubApi.generateReadme(repoFullName, style);
+    }
   });
 };
 

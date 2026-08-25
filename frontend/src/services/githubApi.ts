@@ -34,8 +34,8 @@ export const githubApi = {
     const res = await api.post('/api/github/scan/batch', { repo_full_names: repoFullNames });
     return res.data;
   },
-  generateReadme: async (repoFullName: string): Promise<{ readme_markdown: string; suggestion_id?: string }> => {
-    const res = await api.post('/api/github/readme/generate', { repo_full_name: repoFullName });
+  generateReadme: async (repoFullName: string, style: string = 'recruiter'): Promise<{ readme_markdown: string; suggestion_id?: string }> => {
+    const res = await api.post('/api/github/readme/generate', { repo_full_name: repoFullName, style });
     return res.data;
   },
   pushReadme: async (payload: { repoFullName: string; content: string }): Promise<{ committed: boolean; sha?: string }> => {
