@@ -1,11 +1,14 @@
-# Python
+# Python & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 env/
+venv/
 .venv/
+**/venv/
+**/.venv/
 build/
 develop-eggs/
 dist/
@@ -23,6 +26,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.pytest_cache/
 
 # Node
 node_modules/
@@ -30,10 +34,20 @@ dist/
 dist-ssr/
 *.local
 
-# Environment
+# Environment & Secrets
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+
+# Editor & Agent files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.agent/
+.agents/
+.gemini/
 
 # OS
 .DS_Store
