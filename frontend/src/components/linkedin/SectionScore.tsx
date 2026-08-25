@@ -1,16 +1,48 @@
 import { Badge } from '@/components/ui/badge';
+import { Tooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { CheckCircle2, TrendingUp, AlertTriangle } from 'lucide-react';
 
-export function SectionScore({ score }: { score?: number }) {
+export function SectionScore({ score, reasoning }: { score?: number; reasoning?: string }) {
   if (score === undefined || score === null) return null;
-  
-  let colorClass = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25';
-  if (score < 50) colorClass = 'bg-rose-500/15 text-rose-400 border-rose-500/25';
-  else if (score <= 75) colorClass = 'bg-amber-500/15 text-amber-400 border-amber-500/25';
-  
-  return (
-    <Badge variant="outline" className={cn("ml-2 font-mono text-xs font-semibold px-2 py-0.5 border", colorClass)}>
-      {score}/100
+
+  let variant: 'success' | 'warning' | 'destructive' = 'success';
+  let label = 'Optimal';
+  let Icon = CheckCircle2;
+
+  if (score < 60) {
+    variant = 'destructive';
+    label = 'Needs Action';
+    Icon = AlertTriangle;
+  } else if (score <= 75) {
+    variant = 'warning';
+    label = 'Moderate';
+    Icon = TrendingUp;
+  }
+
+  const badgeEl = (
+    <Badge
+      variant={variant}
+      className={cn(
+        'font-mono text-[11px] font-bold px-2 py-0.5 border flex items-center gap-1 cursor-default select-none'
+      )}
+    >
+      <Icon className="h-3 w-3" />
+      <span>{score}/100</span>
     </Badge>
+  );
+
+  if (reasoning) {
+    return (
+      <Tooltip content={<span className="max-w-xs">{reasoning}</span>}>
+        {badgeEl}
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Tooltip content={`Section Quality Score: ${score}% (${label})`}>
+      {badgeEl}
+    </Tooltip>
   );
 }
