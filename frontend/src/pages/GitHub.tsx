@@ -1,85 +1,98 @@
 import { useState } from 'react';
 import { useRepos, useSyncRepos, useScanRepo, useScanBatchRepos } from '@/hooks/useGithubRepos';
+import { useGithubStore } from '@/stores/githubStore';
+import { toast } from '@/hooks/useToast';
 import { RepoHealthTable } from '@/components/github/RepoHealthTable';
 import { SecurityScanPanel } from '@/components/github/SecurityScanPanel';
 import { ReadmeGenerator } from '@/components/github/ReadmeGenerator';
+import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { GithubRepo } from '@/types/github';
-import { Github as GithubIcon, RefreshCw, ShieldAlert, Search, FolderGit2 } from 'lucide-react';
+import {
+  Github as GithubIcon,
+  RefreshCw,
+  ShieldAlert,
+  FolderGit2,
+  Lock,
+  FileText,
+  Star,
+  ExternalLink,
+  GitBranch,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function GitHub() {
-  const [filter, setFilter] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedRepo, setSelectedRepo] = useState<GithubRepo | null>(null);
-  const [selectedRepoFullNames, setSelectedRepoFullNames] = useState<Set<string>>(new Set());
-  
-  const { data: repos, isLoading } = useRepos(filter !== 'all' ? filter : undefined);
+  const {
+    selectedRepoId,
+    setSelectedRepoId,
+    selectedRepoFullNames,
+    toggleRepoSelection,
+    selectAllRepos,
+    clearSelectedRepos,
+    activeTab,
+    setActiveTab,
+  } = useGithubStore();
+
+  const { data: repos, isLoading } = useRepos();
   const { mutate: syncRepos, isPending: isSyncing } = useSyncRepos();
   const { mutate: scanRepo, isPending: isScanning } = useScanRepo();
   const { mutate: scanBatchRepos, isPending: isScanningBatch } = useScanBatchRepos();
 
-  const filteredRepos = repos?.filter(r => 
-    r.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (r.language && r.language.toLowerCase().includes(searchQuery.toLowerCase()))
-  ) || [];
+  const selectedRepo = repos?.find((r) => r.id === selectedRepoId) || null;
 
-  const handleScan = () => {
-    if (selectedRepo) {
-      scanRepo(selectedRepo.full_name);
-    }
-  };
-
-  const handleToggleSelect = (fullName: string) => {
-    setSelectedRepoFullNames(prev => {
-      const next = new Set(prev);
-      if (next.has(fullName)) {
-        next.delete(fullName);
-      } else {
-        next.add(fullName);
-      }
-      return next;
+  const handleSync = () => {
+    toast.info('Syncing GitHub Repositories...', 'Fetching public and private repositories');
+    syncRepos(undefined, {
+      onSuccess: () => toast.success('GitHub Sync Complete!'),
+      onError: (err: any) => toast.error('Sync Failed', err?.message),
     });
   };
 
-  const handleToggleSelectAll = () => {
-    if (!repos) return;
-    const allSelected = repos.length > 0 && repos.every(repo => selectedRepoFullNames.has(repo.full_name));
-    if (allSelected) {
-      setSelectedRepoFullNames(prev => {
-        const next = new Set(prev);
-        repos.forEach(repo => next.delete(repo.full_name));
-        return next;
-      });
-    } else {
-      setSelectedRepoFullNames(prev => {
-        const next = new Set(prev);
-        repos.forEach(repo => next.add(repo.full_name));
-        return next;
-      });
-    }
+  const handleScanCurrent = () => {
+    if (!selectedRepo) return;
+    toast.ai('Scanning Repository Security...', `Inspecting ${selectedRepo.full_name}`);
+    scanRepo(selectedRepo.full_name, {
+      onSuccess: () => toast.success('Security Scan Complete!'),
+      onError: (err: any) => toast.error('Scan Failed', err?.message),
+    });
   };
 
-  const handleScanSelected = () => {
-    if (selectedRepoFullNames.size > 0) {
-      scanBatchRepos(Array.from(selectedRepoFullNames), {
-        onSuccess: () => {
-          setSelectedRepoFullNames(new Set());
-        }
-      });
+  const handleBatchScan = (fullNames: string[]) => {
+    toast.ai('Batch Scanning Repositories...', `Running security audit on ${fullNames.length} repos`);
+    scanBatchRepos(fullNames, {
+      onSuccess: () => {
+        clearSelectedRepos();
+        toast.success('Batch Security Scan Finished!');
+      },
+      onError: (err: any) => toast.error('Batch Scan Failed', err?.message),
+    });
+  };
+
+  const handleSelectRepo = (repo: GithubRepo) => {
+    setSelectedRepoId(repo.id);
+  };
+
+  const allRepoNames = (repos || []).map((r) => r.full_name);
+  const handleToggleSelectAll = () => {
+    const allSelected = allRepoNames.length > 0 && allRepoNames.every((n) => selectedRepoFullNames.has(n));
+    if (allSelected) {
+      clearSelectedRepos();
+    } else {
+      selectAllRepos(allRepoNames);
     }
   };
 
   return (
-    <div className="flex h-full overflow-hidden animate-fade-in">
-      {/* Left Column: Repository List & Filters */}
-      <div className="w-1/2 p-8 overflow-y-auto border-r border-border/40 space-y-6 flex flex-col justify-between">
+    <div className="flex flex-col lg:flex-row h-full overflow-hidden animate-fade-in">
+      {/* Left Column: Repository Portfolio Table */}
+      <div className="w-full lg:w-1/2 p-6 sm:p-8 overflow-y-auto border-r border-border/40 space-y-6 flex flex-col justify-between">
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          {/* Header Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/30 pb-4">
             <div className="space-y-1">
-              <h2 className="text-2xl font-bold font-heading tracking-tight text-foreground flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+              <h2 className="text-2xl font-extrabold font-heading tracking-tight text-foreground flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm">
                   <GithubIcon className="h-5 w-5" />
                 </div>
                 GitHub Portfolio
@@ -89,118 +102,159 @@ export default function GitHub() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button 
-                onClick={handleScanSelected} 
-                disabled={isScanningBatch || selectedRepoFullNames.size === 0} 
-                variant="outline"
-                className="text-xs rounded-xl h-9 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10"
-              >
-                {isScanningBatch ? 'Scanning...' : `Scan Selected (${selectedRepoFullNames.size})`}
-              </Button>
-              <Button 
-                onClick={() => syncRepos()} 
-                disabled={isSyncing} 
-                className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 rounded-xl h-9 text-xs font-semibold gap-1.5"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Syncing...' : 'Sync GitHub'}
-              </Button>
-            </div>
+            <Button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 rounded-xl h-9 text-xs font-semibold gap-1.5 shrink-0"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync GitHub'}
+            </Button>
           </div>
 
-          {/* Search & Filter Bar */}
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1">
-              <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input 
-                placeholder="Filter repos or language..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs rounded-xl bg-secondary/40 border-border/40"
-              />
-            </div>
-            <div className="flex gap-1.5 p-1 bg-secondary/30 rounded-xl border border-border/40">
-              <button 
-                onClick={() => setFilter('all')}
-                className={cn("px-3 py-1 text-xs font-semibold rounded-lg transition-all", filter === 'all' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-              >
-                All
-              </button>
-              <button 
-                onClick={() => setFilter('needs_readme')}
-                className={cn("px-3 py-1 text-xs font-semibold rounded-lg transition-all", filter === 'needs_readme' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-              >
-                No README
-              </button>
-              <button 
-                onClick={() => setFilter('has_secrets')}
-                className={cn("px-3 py-1 text-xs font-semibold rounded-lg transition-all", filter === 'has_secrets' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-              >
-                Security Issues
-              </button>
-            </div>
-          </div>
-
+          {/* Table or Skeleton Loading */}
           {isLoading ? (
-            <div className="p-12 text-center text-muted-foreground space-y-3">
-              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-              <p className="text-xs font-medium">Fetching GitHub Repositories...</p>
-            </div>
+            <TableSkeleton rows={6} cols={6} />
           ) : (
-            <RepoHealthTable 
-              repos={filteredRepos} 
-              onSelectRepo={setSelectedRepo} 
-              selectedRepoId={selectedRepo?.id || null} 
+            <RepoHealthTable
+              repos={repos || []}
+              onSelectRepo={handleSelectRepo}
+              selectedRepoId={selectedRepoId}
               selectedRepoFullNames={selectedRepoFullNames}
-              onToggleSelect={handleToggleSelect}
+              onToggleSelect={toggleRepoSelection}
               onToggleSelectAll={handleToggleSelectAll}
+              onClearSelection={clearSelectedRepos}
+              onBatchScan={handleBatchScan}
+              isBatchScanning={isScanningBatch}
             />
           )}
         </div>
       </div>
-      
+
       {/* Right Column: Repository Inspector Studio */}
-      <div className="w-1/2 p-8 overflow-y-auto bg-card/40 backdrop-blur-xl space-y-6">
+      <div className="w-full lg:w-1/2 p-6 sm:p-8 overflow-y-auto bg-card/40 backdrop-blur-xl space-y-6">
         {selectedRepo ? (
-          <div className="space-y-6">
-            <div className="flex items-start justify-between border-b border-border/40 pb-4">
-              <div>
-                <h2 className="text-xl font-bold font-heading text-foreground flex items-center gap-2">
-                  <FolderGit2 className="h-5 w-5 text-indigo-400" />
-                  {selectedRepo.name}
-                </h2>
-                <p className="text-xs font-mono text-muted-foreground mt-0.5">{selectedRepo.full_name}</p>
+          <div className="space-y-6 animate-fade-in">
+            {/* Repo Inspector Top Banner */}
+            <div className="p-5 rounded-2xl bg-secondary/40 border border-border/40 space-y-3 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold font-heading text-foreground flex items-center gap-2">
+                    <FolderGit2 className="h-5 w-5 text-indigo-400" />
+                    <span>{selectedRepo.name}</span>
+                    {selectedRepo.is_private && (
+                      <Badge variant="outline" className="text-[10px] bg-slate-800 text-muted-foreground border-border/40 font-mono">
+                        Private
+                      </Badge>
+                    )}
+                  </h2>
+                  <a
+                    href={`https://github.com/${selectedRepo.full_name}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-mono text-muted-foreground hover:text-indigo-300 transition-colors flex items-center gap-1 mt-0.5"
+                  >
+                    <span>{selectedRepo.full_name}</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleScanCurrent}
+                    disabled={isScanning}
+                    variant="outline"
+                    className="text-xs rounded-xl h-9 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 gap-1.5"
+                  >
+                    <ShieldAlert className={`h-3.5 w-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+                    {isScanning ? 'Scanning...' : 'Scan Security'}
+                  </Button>
+                </div>
               </div>
-              <Button 
-                onClick={handleScan} 
-                disabled={isScanning} 
-                variant="outline"
-                className="text-xs rounded-xl h-9 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 gap-1.5"
-              >
-                <ShieldAlert className={`h-3.5 w-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-                {isScanning ? 'Scanning...' : 'Run Security Scan'}
-              </Button>
+
+              {selectedRepo.description && (
+                <p className="text-xs text-muted-foreground leading-relaxed pt-1 border-t border-border/30">
+                  {selectedRepo.description}
+                </p>
+              )}
+
+              {/* Repo Quick Stats */}
+              <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground pt-1">
+                <div className="flex items-center gap-1">
+                  <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400/20" />
+                  <span>{selectedRepo.stars} stars</span>
+                </div>
+                {selectedRepo.language && (
+                  <div className="flex items-center gap-1">
+                    <GitBranch className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>{selectedRepo.language}</span>
+                  </div>
+                )}
+                {selectedRepo.last_pushed_at && (
+                  <div>
+                    Last pushed: {new Date(selectedRepo.last_pushed_at).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
             </div>
-            
-            {selectedRepo.description && (
-              <p className="text-xs text-muted-foreground leading-relaxed p-3 bg-secondary/30 rounded-xl border border-border/30">
-                {selectedRepo.description}
-              </p>
+
+            {/* Inspector Navigation Tabs */}
+            <div className="flex items-center gap-1.5 p-1 bg-secondary/30 rounded-2xl border border-border/40 text-xs">
+              <button
+                onClick={() => setActiveTab('security')}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 font-semibold rounded-xl transition-all select-none',
+                  activeTab === 'security'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Lock className="h-3.5 w-3.5" />
+                Security Audit
+              </button>
+
+              <button
+                onClick={() => setActiveTab('readme')}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 font-semibold rounded-xl transition-all select-none',
+                  activeTab === 'readme'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                AI README Studio
+              </button>
+            </div>
+
+            {/* Tab Views */}
+            {activeTab === 'security' && (
+              <SecurityScanPanel
+                scan={selectedRepo.latest_scan}
+                repoFullName={selectedRepo.full_name}
+              />
             )}
 
-            <SecurityScanPanel scan={selectedRepo.latest_scan} />
-            <ReadmeGenerator repoFullName={selectedRepo.full_name} hasReadme={selectedRepo.has_readme} />
+            {activeTab === 'readme' && (
+              <ReadmeGenerator
+                repoFullName={selectedRepo.full_name}
+                hasReadme={selectedRepo.has_readme}
+                existingReadmeContent={selectedRepo.readme_content || ''}
+              />
+            )}
           </div>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-3">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 shadow-lg">
+          /* Empty Placeholder */
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 p-8">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 shadow-glow">
               <GithubIcon className="h-8 w-8" />
             </div>
-            <h4 className="font-semibold text-foreground text-sm">Select a Repository</h4>
-            <p className="text-xs text-muted-foreground max-w-xs text-center">
-              Click any repository from the left panel to inspect security vulnerabilities, leaked secrets, or generate a professional README.
-            </p>
+            <div className="space-y-1 text-center">
+              <h4 className="font-bold font-heading text-foreground text-sm">Select a Repository</h4>
+              <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                Click any repository in the portfolio list to run security audits, review leaked secrets, or generate a professional README.
+              </p>
+            </div>
           </div>
         )}
       </div>
