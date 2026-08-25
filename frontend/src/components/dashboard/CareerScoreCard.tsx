@@ -30,7 +30,7 @@ export function CareerScoreCard({ title, score, delta = 4 }: CareerScoreCardProp
         stroke: '#10b981',
         glow: 'shadow-glow-emerald',
         icon: CheckCircle2,
-        desc: 'Strong market keyword alignment & evidence',
+        desc: 'Strong market keyword alignment & flagship project evidence',
       };
     if (val >= 60)
       return {
@@ -40,7 +40,7 @@ export function CareerScoreCard({ title, score, delta = 4 }: CareerScoreCardProp
         stroke: '#818cf8',
         glow: 'shadow-glow',
         icon: TrendingUp,
-        desc: 'Minor keyword gaps & README improvements recommended',
+        desc: 'Solid codebase with minor README or keyword optimizations available',
       };
     return {
       label: 'Action Needed',
@@ -49,7 +49,7 @@ export function CareerScoreCard({ title, score, delta = 4 }: CareerScoreCardProp
       stroke: '#f59e0b',
       glow: 'shadow-glow-amber',
       icon: AlertCircle,
-      desc: 'Significant skill or security gaps identified',
+      desc: 'Action recommended: Evaluate repositories & align resume bullets',
     };
   };
 
@@ -64,11 +64,11 @@ export function CareerScoreCard({ title, score, delta = 4 }: CareerScoreCardProp
         iconBg: 'bg-blue-500/10 border-blue-500/20',
       };
     }
-    if (lower.includes('github')) {
+    if (lower.includes('github') || lower.includes('portfolio')) {
       return {
         icon: Github,
         href: '/github',
-        actionLabel: 'Inspect Portfolio',
+        actionLabel: 'Evaluate Portfolio',
         iconColor: 'text-purple-400',
         iconBg: 'bg-purple-500/10 border-purple-500/20',
       };
