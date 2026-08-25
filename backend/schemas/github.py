@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Literal
 from datetime import datetime
 from uuid import UUID
 
@@ -38,3 +38,28 @@ class RepoScanRequest(BaseModel):
 
 class BatchScanRequest(BaseModel):
     repo_full_names: List[str]
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    task_type: str
+    status: Literal['queued', 'running', 'completed', 'failed']
+    progress: float
+    completed_steps: int
+    total_steps: int
+    current_item: Optional[str] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    result: Optional[Dict[str, Any]] = None
+
+class RemediateRepoRequest(BaseModel):
+    repo_full_name: str
+    action: Literal['add_gitignore', 'remove_env', 'fix_all']
+
+class RemediateRepoResponse(BaseModel):
+    repo_full_name: str
+    remediated: bool
+    action_taken: str
+    commit_sha: Optional[str] = None
+    message: str

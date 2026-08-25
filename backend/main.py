@@ -55,10 +55,21 @@ async def verify_api_key(request: Request):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
+from services.task_manager import task_manager
+from schemas.github import TaskStatusResponse
+
 # --- Health Check ---
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/api/tasks/{task_id}", response_model=TaskStatusResponse, tags=["tasks"])
+async def get_global_task_status(task_id: str):
+    task = task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return TaskStatusResponse.model_validate(task)
 
 
 # --- Routers ---

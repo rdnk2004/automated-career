@@ -15,6 +15,38 @@ SECRET_PATTERNS = [
     (r'(?i)secret\s*=\s*["\'][^"\']{4,}["\']', 'Hardcoded secret'),
 ]
 
+STANDARD_GITIGNORE = """# Environments & Secrets
+.env
+.env.local
+.env.*.local
+*.env
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.egg-info/
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+"""
+
 class GitHubService:
     def __init__(self):
         self.base_url = "https://api.github.com"
@@ -96,6 +128,62 @@ class GitHubService:
             response = await client.put(f"/repos/{repo_full_name}/contents/{path}", json=body)
             response.raise_for_status()
             return response.json()
+
+    async def delete_file(self, repo_full_name: str, path: str, message: str) -> Dict[str, Any]:
+        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers) as client:
+            try:
+                get_response = await self._get(client, f"/repos/{repo_full_name}/contents/{path}")
+                sha = get_response.json().get("sha")
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    return {"deleted": False, "message": f"{path} does not exist"}
+                raise
+
+            body = {
+                "message": message,
+                "sha": sha
+            }
+            response = await client.request("DELETE", f"/repos/{repo_full_name}/contents/{path}", json=body)
+            response.raise_for_status()
+            return response.json()
+
+    async def remediate_repo(self, repo_full_name: str, action: str) -> Dict[str, Any]:
+        """
+        Remediate security risks by adding .gitignore or deleting committed .env secrets.
+        """
+        if action in ("add_gitignore", "fix_all"):
+            push_res = await self.push_file(
+                repo_full_name=repo_full_name,
+                path=".gitignore",
+                content=STANDARD_GITIGNORE,
+                message="fix(security): add standard .gitignore with secret exclusions"
+            )
+            commit_sha = push_res.get("commit", {}).get("sha")
+            return {
+                "remediated": True,
+                "action_taken": "add_gitignore",
+                "commit_sha": commit_sha,
+                "message": "Successfully pushed standard .gitignore to repository."
+            }
+        elif action == "remove_env":
+            del_res = await self.delete_file(
+                repo_full_name=repo_full_name,
+                path=".env",
+                message="fix(security): remove committed .env secret file"
+            )
+            commit_sha = del_res.get("commit", {}).get("sha")
+            return {
+                "remediated": True,
+                "action_taken": "remove_env",
+                "commit_sha": commit_sha,
+                "message": "Successfully removed .env file from repository."
+            }
+        return {
+            "remediated": False,
+            "action_taken": action,
+            "commit_sha": None,
+            "message": f"Action '{action}' not recognized."
+        }
 
     async def scan_for_secrets(self, repo_full_name: str) -> Dict[str, Any]:
         # fetch Python/JS/config files, run SECRET_PATTERNS regex
