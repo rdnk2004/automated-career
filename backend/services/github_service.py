@@ -2,9 +2,12 @@ import httpx
 import asyncio
 import re
 import base64
+import logging
 from typing import List, Dict, Any, Optional
 from config import settings
 from models.github import GithubRepo, RepoScan
+
+logger = logging.getLogger("career_os")
 
 SECRET_PATTERNS = [
     (r'sk-[a-zA-Z0-9]{20,}', 'OpenAI API key'),
@@ -53,10 +56,21 @@ class GitHubService:
 
     @property
     def headers(self):
-        return {
-            "Authorization": f"Bearer {settings.github_pat}",
+        h = {
             "Accept": "application/vnd.github.v3+json",
-            "X-GitHub-Api-Version": "2022-11-28"
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "Career-OS-Agent/1.0"
+        }
+        if settings.github_pat and settings.github_pat.strip() and not settings.github_pat.startswith("ghp_your"):
+            h["Authorization"] = f"Bearer {settings.github_pat.strip()}"
+        return h
+
+    @property
+    def anon_headers(self):
+        return {
+            "Accept": "application/vnd.github.v3+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "Career-OS-Agent/1.0"
         }
 
     async def _get(self, client: httpx.AsyncClient, url: str, params: Optional[Dict] = None) -> httpx.Response:
@@ -65,37 +79,87 @@ class GitHubService:
         return response
 
     async def get_all_repos(self) -> List[Dict[str, Any]]:
-        # fetch all repos for GITHUB_USERNAME
+        """
+        Fetch all repositories for the configured account.
+        Tries authenticated /user/repos first; falls back gracefully to public /users/{username}/repos.
+        """
+        username = settings.github_username or "rdnk2004"
         repos = []
+        has_pat = bool(settings.github_pat and settings.github_pat.strip() and not settings.github_pat.startswith("ghp_your"))
+
+        if has_pat:
+            try:
+                page = 1
+                async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers, timeout=10.0) as client:
+                    while True:
+                        response = await self._get(
+                            client,
+                            "/user/repos",
+                            params={"per_page": 100, "page": page, "sort": "pushed", "direction": "desc"}
+                        )
+                        data = response.json()
+                        if not data:
+                            break
+                        repos.extend(data)
+                        page += 1
+                        await asyncio.sleep(0.05)
+                logger.info(f"Successfully fetched {len(repos)} repos via authenticated GitHub PAT.")
+                return repos
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 401:
+                    logger.warning(f"GitHub PAT rejected (401 Unauthorized). Falling back to public repos for {username}...")
+                else:
+                    logger.warning(f"Authenticated repo fetch failed ({e}). Falling back to public repos for {username}...")
+            except Exception as e:
+                logger.warning(f"Authenticated repo fetch exception ({e}). Falling back to public repos for {username}...")
+
+        # Fallback: Query public repositories for the username without requiring a PAT
         page = 1
-        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, headers=self.anon_headers, timeout=10.0) as client:
             while True:
-                response = await self._get(
-                    client,
-                    "/user/repos",
-                    params={"per_page": 100, "page": page}
-                )
-                data = response.json()
-                if not data:
+                try:
+                    response = await self._get(
+                        client,
+                        f"/users/{username}/repos",
+                        params={"per_page": 100, "page": page, "sort": "pushed", "direction": "desc"}
+                    )
+                    data = response.json()
+                    if not data or not isinstance(data, list):
+                        break
+                    repos.extend(data)
+                    page += 1
+                    await asyncio.sleep(0.05)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        logger.error(f"GitHub user {username} not found.")
                     break
-                repos.extend(data)
-                page += 1
-                await asyncio.sleep(0.1) # Rate limit protection
+                except Exception as e:
+                    logger.error(f"Public repo fetch error: {e}")
+                    break
+
+        logger.info(f"Fetched {len(repos)} public repos for {username}.")
         return repos
 
     async def get_repo_file_tree(self, repo_full_name: str) -> Dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers, timeout=10.0) as client:
             try:
-                # GET /repos/{owner}/{repo}/git/trees/HEAD?recursive=1
                 response = await self._get(client, f"/repos/{repo_full_name}/git/trees/HEAD", params={"recursive": "1"})
                 return response.json()
             except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404 or e.response.status_code == 409:
+                if e.response.status_code in (401, 403):
+                    # Try anonymous request for public repos
+                    async with httpx.AsyncClient(base_url=self.base_url, headers=self.anon_headers, timeout=10.0) as anon_client:
+                        try:
+                            res = await self._get(anon_client, f"/repos/{repo_full_name}/git/trees/HEAD", params={"recursive": "1"})
+                            return res.json()
+                        except Exception:
+                            return {"tree": []}
+                if e.response.status_code in (404, 409):
                     return {"tree": []}
                 raise
 
     async def get_file_content(self, repo_full_name: str, path: str) -> Optional[str]:
-        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers, timeout=10.0) as client:
             try:
                 response = await self._get(client, f"/repos/{repo_full_name}/contents/{path}")
                 data = response.json()
@@ -103,13 +167,63 @@ class GitHubService:
                     return base64.b64decode(data["content"]).decode('utf-8')
                 return None
             except httpx.HTTPStatusError as e:
+                if e.response.status_code in (401, 403):
+                    async with httpx.AsyncClient(base_url=self.base_url, headers=self.anon_headers, timeout=10.0) as anon_client:
+                        try:
+                            res = await self._get(anon_client, f"/repos/{repo_full_name}/contents/{path}")
+                            data = res.json()
+                            if "content" in data and data["encoding"] == "base64":
+                                return base64.b64decode(data["content"]).decode('utf-8')
+                        except Exception:
+                            return None
                 if e.response.status_code == 404:
                     return None
                 raise
 
+    async def inspect_repo_code(self, repo_full_name: str) -> Dict[str, Any]:
+        """
+        Deep code inspector: extracts file tree, identifies architecture manifests,
+        and samples primary entrypoint source code.
+        """
+        tree_data = await self.get_repo_file_tree(repo_full_name)
+        tree = tree_data.get("tree", [])
+        
+        file_paths = [item.get("path", "") for item in tree if item.get("type") == "blob"]
+        tree_summary = "\n".join(file_paths[:60])
+        if len(file_paths) > 60:
+            tree_summary += f"\n... and {len(file_paths) - 60} more files"
+
+        # Key architectural and manifest files to sample
+        priority_files = [
+            "package.json", "requirements.txt", "pyproject.toml", "Cargo.toml",
+            "go.mod", "Dockerfile", "docker-compose.yml", "main.py", "index.ts",
+            "src/App.tsx", "src/main.tsx", "server.js", "src/index.js"
+        ]
+
+        sample_code_pieces = []
+        detected_manifests = []
+
+        for p_file in priority_files:
+            # Check direct match or subfolder match
+            matching_paths = [p for p in file_paths if p.endswith(p_file) or p == p_file]
+            if matching_paths:
+                target_path = matching_paths[0]
+                detected_manifests.append(target_path)
+                if len(sample_code_pieces) < 4:
+                    content = await self.get_file_content(repo_full_name, target_path)
+                    if content:
+                        trimmed = content[:2500]
+                        sample_code_pieces.append(f"--- File: {target_path} ---\n{trimmed}")
+
+        return {
+            "file_tree": tree_summary or "Empty repository tree",
+            "sample_code": "\n\n".join(sample_code_pieces) if sample_code_pieces else "No source code available",
+            "detected_manifests": detected_manifests,
+            "total_files": len(file_paths)
+        }
+
     async def push_file(self, repo_full_name: str, path: str, content: str, message: str) -> Dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers) as client:
-            # Check if file exists to get SHA
+        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers, timeout=10.0) as client:
             sha = None
             try:
                 get_response = await self._get(client, f"/repos/{repo_full_name}/contents/{path}")
@@ -130,7 +244,7 @@ class GitHubService:
             return response.json()
 
     async def delete_file(self, repo_full_name: str, path: str, message: str) -> Dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers, timeout=10.0) as client:
             try:
                 get_response = await self._get(client, f"/repos/{repo_full_name}/contents/{path}")
                 sha = get_response.json().get("sha")
@@ -148,9 +262,6 @@ class GitHubService:
             return response.json()
 
     async def remediate_repo(self, repo_full_name: str, action: str) -> Dict[str, Any]:
-        """
-        Remediate security risks by adding .gitignore or deleting committed .env secrets.
-        """
         if action in ("add_gitignore", "fix_all"):
             push_res = await self.push_file(
                 repo_full_name=repo_full_name,
@@ -186,7 +297,6 @@ class GitHubService:
         }
 
     async def scan_for_secrets(self, repo_full_name: str) -> Dict[str, Any]:
-        # fetch Python/JS/config files, run SECRET_PATTERNS regex
         tree_data = await self.get_repo_file_tree(repo_full_name)
         tree = tree_data.get("tree", [])
         
@@ -224,35 +334,28 @@ class GitHubService:
                                     "line": line_num,
                                     "pattern": description
                                 })
-                await asyncio.sleep(0.1) # Rate limit protection
+                await asyncio.sleep(0.05)
                 
         return {
             "has_gitignore": has_gitignore,
             "has_env_file": has_env_file,
             "has_readme": has_readme,
             "leaked_secrets": leaked_secrets,
-            "ai_issues": [] # To be populated by AI agent if needed
+            "ai_issues": []
         }
 
     def calculate_health_score(self, repo: GithubRepo, scan: RepoScan) -> int:
         score = 100
-        
         if not repo.has_readme:
             score -= 20
-            
         if not scan.has_gitignore:
             score -= 10
-            
         if scan.has_env_file:
             score -= 30
-            
         if scan.leaked_secrets and len(scan.leaked_secrets) > 0:
-            # Serious penalty for leaked secrets
             score -= (20 * len(scan.leaked_secrets))
-            
         if scan.ai_issues and len(scan.ai_issues) > 0:
             score -= (5 * len(scan.ai_issues))
-            
         return max(0, score)
 
 github_service = GitHubService()

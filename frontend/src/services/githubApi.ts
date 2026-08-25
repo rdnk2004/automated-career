@@ -7,8 +7,19 @@ export const githubApi = {
     const res = await api.get('/api/github/repos', { params });
     return res.data;
   },
+  getLatestRepo: async (): Promise<GithubRepo | null> => {
+    const res = await api.get('/api/github/latest');
+    return res.data;
+  },
   syncRepos: async (): Promise<{ task_id: string, status: string }> => {
     const res = await api.post('/api/github/sync');
+    return res.data;
+  },
+  evaluateRepo: async (repoFullName: string, targetRole?: string): Promise<any> => {
+    const res = await api.post('/api/github/evaluate', {
+      repo_full_name: repoFullName,
+      target_role: targetRole,
+    });
     return res.data;
   },
   scanRepo: async (repoFullName: string): Promise<RepoScan> => {
@@ -29,6 +40,10 @@ export const githubApi = {
   },
   pushReadme: async (payload: { repoFullName: string; content: string }): Promise<{ committed: boolean; sha?: string }> => {
     const res = await api.post('/api/github/readme/push', { repo_full_name: payload.repoFullName, content: payload.content });
+    return res.data;
+  },
+  remediateRepo: async (repoFullName: string, action: string): Promise<any> => {
+    const res = await api.post('/api/github/remediate', { repo_full_name: repoFullName, action });
     return res.data;
   }
 };

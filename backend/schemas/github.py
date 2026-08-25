@@ -7,6 +7,13 @@ class RepoScanResponse(BaseModel):
     id: UUID
     repo_id: UUID
     health_score: Optional[int] = None
+    resume_score: Optional[int] = None
+    portfolio_tier: Optional[str] = None
+    key_technologies: Optional[List[str]] = None
+    architecture_summary: Optional[str] = None
+    resume_bullets: Optional[List[str]] = None
+    recommendation_reason: Optional[str] = None
+    production_readiness: Optional[Dict[str, Any]] = None
     has_gitignore: Optional[bool] = None
     has_env_file: Optional[bool] = None
     leaked_secrets: Optional[List[Dict[str, Any]]] = None
@@ -14,6 +21,21 @@ class RepoScanResponse(BaseModel):
     scanned_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class ProjectEvaluationResponse(BaseModel):
+    repo_full_name: str
+    resume_score: int
+    portfolio_tier: str
+    key_technologies: List[str]
+    architecture_summary: str
+    resume_bullets: List[str]
+    recommendation_reason: str
+    production_readiness: Dict[str, Any]
+    evaluated_at: datetime
+
+class EvaluateRepoRequest(BaseModel):
+    repo_full_name: str
+    target_role: Optional[str] = None
 
 class GithubRepoResponse(BaseModel):
     id: UUID
@@ -26,7 +48,13 @@ class GithubRepoResponse(BaseModel):
     has_readme: bool
     readme_content: Optional[str] = None
     is_private: bool
-    stars: int
+    stars: int = 0
+    forks_count: Optional[int] = 0
+    open_issues_count: Optional[int] = 0
+    size_kb: Optional[int] = 0
+    default_branch: Optional[str] = "main"
+    license_name: Optional[str] = None
+    html_url: Optional[str] = None
     last_pushed_at: Optional[datetime] = None
     synced_at: datetime
     latest_scan: Optional[RepoScanResponse] = None

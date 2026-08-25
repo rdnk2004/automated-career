@@ -11,7 +11,6 @@ import {
   FileCode,
   FolderGit2,
   ExternalLink,
-  ShieldAlert,
   Search,
   ArrowUpDown,
   ArrowUp,
@@ -20,10 +19,16 @@ import {
   CheckSquare,
   Square,
   MinusSquare,
+  GitFork,
+  AlertCircle,
+  HardDrive,
+  Scale,
+  Clock,
+  Trophy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type SortKey = 'name' | 'stars' | 'health' | 'pushed' | 'language';
+type SortKey = 'name' | 'stars' | 'forks' | 'resume_score' | 'pushed' | 'language';
 type SortOrder = 'asc' | 'desc';
 
 export function RepoHealthTable({
@@ -48,7 +53,7 @@ export function RepoHealthTable({
   isBatchScanning?: boolean;
 }) {
   const [search, setSearch] = useState('');
-  const [healthFilter, setHealthFilter] = useState<'all' | 'needs_readme' | 'has_secrets' | 'healthy'>('all');
+  const [tierFilter, setTierFilter] = useState<'all' | 'tier1' | 'tier2' | 'needs_readme'>('all');
   const [languageFilter, setLanguageFilter] = useState<string>('all');
   const [sortKey, setSortKey] = useState<SortKey>('pushed');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -62,6 +67,34 @@ export function RepoHealthTable({
     return Array.from(langs).sort();
   }, [repos]);
 
+  // Format relative or friendly date
+  const formatPushedDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffHours < 1) return 'Just now';
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch {
+      return '-';
+    }
+  };
+
+  const formatSize = (sizeKb?: number) => {
+    if (!sizeKb || sizeKb === 0) return '';
+    if (sizeKb >= 1024) {
+      return `${(sizeKb / 1024).toFixed(1)}M`;
+    }
+    return `${sizeKb}K`;
+  };
+
   // Filter and Sort Repositories
   const filteredAndSortedRepos = useMemo(() => {
     let result = repos.filter((repo) => {
@@ -74,17 +107,17 @@ export function RepoHealthTable({
       // Language filter
       if (languageFilter !== 'all' && repo.language !== languageFilter) return false;
 
-      // Health status filter
-      if (healthFilter === 'needs_readme' && repo.has_readme) return false;
-      if (healthFilter === 'has_secrets') {
-        const hasSecrets =
-          repo.latest_scan?.has_env_file ||
-          (repo.latest_scan?.leaked_secrets && repo.latest_scan.leaked_secrets.length > 0);
-        if (!hasSecrets) return false;
+      // Tier & Readme filter
+      if (tierFilter === 'needs_readme' && repo.has_readme) return false;
+      if (tierFilter === 'tier1') {
+        const tier = repo.latest_scan?.portfolio_tier;
+        const score = repo.latest_scan?.resume_score ?? repo.latest_scan?.health_score;
+        if (!tier?.toLowerCase().includes('tier 1') && (!score || score < 85)) return false;
       }
-      if (healthFilter === 'healthy') {
-        const score = repo.latest_scan?.health_score;
-        if (!score || score < 80) return false;
+      if (tierFilter === 'tier2') {
+        const tier = repo.latest_scan?.portfolio_tier;
+        const score = repo.latest_scan?.resume_score ?? repo.latest_scan?.health_score;
+        if (!tier?.toLowerCase().includes('tier 2') && (!score || score < 65 || score >= 85)) return false;
       }
 
       return true;
@@ -97,9 +130,11 @@ export function RepoHealthTable({
         comparison = a.name.localeCompare(b.name);
       } else if (sortKey === 'stars') {
         comparison = (a.stars || 0) - (b.stars || 0);
-      } else if (sortKey === 'health') {
-        const aScore = a.latest_scan?.health_score ?? -1;
-        const bScore = b.latest_scan?.health_score ?? -1;
+      } else if (sortKey === 'forks') {
+        comparison = (a.forks_count || 0) - (b.forks_count || 0);
+      } else if (sortKey === 'resume_score') {
+        const aScore = a.latest_scan?.resume_score ?? a.latest_scan?.health_score ?? -1;
+        const bScore = b.latest_scan?.resume_score ?? b.latest_scan?.health_score ?? -1;
         comparison = aScore - bScore;
       } else if (sortKey === 'pushed') {
         const aDate = a.last_pushed_at ? new Date(a.last_pushed_at).getTime() : 0;
@@ -113,7 +148,7 @@ export function RepoHealthTable({
     });
 
     return result;
-  }, [repos, search, healthFilter, languageFilter, sortKey, sortOrder]);
+  }, [repos, search, tierFilter, languageFilter, sortKey, sortOrder]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -176,7 +211,7 @@ export function RepoHealthTable({
         <div className="space-y-1">
           <h4 className="font-bold font-heading text-foreground text-base">No Repositories Synced</h4>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-            Click "Sync from GitHub" to fetch all public and private repositories from your GitHub account.
+            Click "Sync GitHub" to fetch all public and private repositories from your GitHub account.
           </p>
         </div>
       </div>
@@ -211,22 +246,22 @@ export function RepoHealthTable({
           </select>
         </div>
 
-        {/* Health status filter pills */}
+        {/* Tier & Health status filter pills */}
         <div className="flex items-center gap-1 p-0.5 rounded-xl bg-slate-900 border border-border/40 text-[11px]">
           {(
             [
-              { key: 'all', label: 'All' },
+              { key: 'all', label: 'All Repos' },
+              { key: 'tier1', label: '⭐ Tier 1 Flagship' },
+              { key: 'tier2', label: '✨ Tier 2 Supporting' },
               { key: 'needs_readme', label: 'Missing README' },
-              { key: 'has_secrets', label: 'Secrets Risk' },
-              { key: 'healthy', label: 'Healthy (80+)' },
             ] as const
           ).map((item) => (
             <button
               key={item.key}
-              onClick={() => setHealthFilter(item.key)}
+              onClick={() => setTierFilter(item.key)}
               className={cn(
                 'px-2.5 py-1 rounded-lg font-semibold transition-all select-none',
-                healthFilter === item.key
+                tierFilter === item.key
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               )}
@@ -278,7 +313,7 @@ export function RepoHealthTable({
                   onClick={() => handleSort('language')}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>Language</span>
+                    <span>Stack & Architecture</span>
                     {sortKey === 'language' ? (
                       sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-indigo-400" /> : <ArrowDown className="h-3 w-3 text-indigo-400" />
                     ) : (
@@ -292,8 +327,8 @@ export function RepoHealthTable({
                   onClick={() => handleSort('stars')}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>Stars</span>
-                    {sortKey === 'stars' ? (
+                    <span>Stats</span>
+                    {sortKey === 'stars' || sortKey === 'forks' ? (
                       sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-indigo-400" /> : <ArrowDown className="h-3 w-3 text-indigo-400" />
                     ) : (
                       <ArrowUpDown className="h-3 w-3 opacity-40" />
@@ -306,7 +341,7 @@ export function RepoHealthTable({
                   onClick={() => handleSort('pushed')}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>Last Pushed</span>
+                    <span>Last Committed</span>
                     {sortKey === 'pushed' ? (
                       sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-indigo-400" /> : <ArrowDown className="h-3 w-3 text-indigo-400" />
                     ) : (
@@ -319,11 +354,11 @@ export function RepoHealthTable({
 
                 <th
                   className="px-4 py-3 font-semibold cursor-pointer select-none hover:text-indigo-300 transition-colors"
-                  onClick={() => handleSort('health')}
+                  onClick={() => handleSort('resume_score')}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>Health Score</span>
-                    {sortKey === 'health' ? (
+                    <span>Resume Impact</span>
+                    {sortKey === 'resume_score' ? (
                       sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-indigo-400" /> : <ArrowDown className="h-3 w-3 text-indigo-400" />
                     ) : (
                       <ArrowUpDown className="h-3 w-3 opacity-40" />
@@ -336,7 +371,7 @@ export function RepoHealthTable({
             </thead>
 
             <tbody className="divide-y divide-border/30">
-              {filteredAndSortedRepos.map((repo) => {
+              {filteredAndSortedRepos.map((repo, idx) => {
                 const isSelected = isRepoSelected(repo.full_name);
                 const isCurrentActive = selectedRepoId === repo.id;
 
@@ -370,9 +405,21 @@ export function RepoHealthTable({
                       <div className="flex items-center gap-2">
                         <FileCode className="h-4 w-4 text-indigo-400 shrink-0" />
                         <div className="min-w-0">
-                          <span className="font-bold text-foreground truncate block max-w-[170px] group-hover:text-indigo-300 transition-colors">
-                            {repo.name}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-foreground truncate max-w-[170px] group-hover:text-indigo-300 transition-colors">
+                              {repo.name}
+                            </span>
+                            {idx === 0 && sortKey === 'pushed' && (
+                              <span className="px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 text-[9px] font-mono font-bold uppercase tracking-wider">
+                                Latest
+                              </span>
+                            )}
+                            {repo.is_private && (
+                              <span className="text-[9px] px-1 rounded bg-slate-800 text-muted-foreground border border-border/40 font-mono">
+                                Private
+                              </span>
+                            )}
+                          </div>
                           {repo.description && (
                             <span className="text-[10px] text-muted-foreground truncate block max-w-[200px]">
                               {repo.description}
@@ -383,21 +430,50 @@ export function RepoHealthTable({
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1.5 font-medium">
-                        <span className={cn('w-2 h-2 rounded-full', getLanguageColor(repo.language))} />
-                        <span>{repo.language || 'Plain Text'}</span>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <span className={cn('w-2 h-2 rounded-full', getLanguageColor(repo.language))} />
+                          <span>{repo.language || 'Plain Text'}</span>
+                        </div>
+                        {repo.license_name && (
+                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+                            <Scale className="h-2.5 w-2.5 text-purple-400" />
+                            <span className="truncate max-w-[100px]">{repo.license_name}</span>
+                          </div>
+                        )}
                       </div>
                     </td>
 
-                    <td className="px-4 py-3.5 font-mono">
+                    <td className="px-4 py-3.5 font-mono text-[11px]">
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <div className="flex items-center gap-1" title="Stars">
+                          <Star className="h-3 w-3 text-amber-400 fill-amber-400/20" />
+                          <span>{repo.stars || 0}</span>
+                        </div>
+                        <div className="flex items-center gap-1" title="Forks">
+                          <GitFork className="h-3 w-3 text-indigo-400" />
+                          <span>{repo.forks_count ?? 0}</span>
+                        </div>
+                        {repo.size_kb ? (
+                          <div className="flex items-center gap-1 text-cyan-400" title="Repo Size">
+                            <HardDrive className="h-3 w-3" />
+                            <span>{formatSize(repo.size_kb)}</span>
+                          </div>
+                        ) : null}
+                        {repo.open_issues_count ? (
+                          <div className="flex items-center gap-1 text-rose-400" title="Open Issues">
+                            <AlertCircle className="h-3 w-3" />
+                            <span>{repo.open_issues_count}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3.5 text-[11px] font-mono">
                       <div className="flex items-center gap-1 text-muted-foreground">
-                        <Star className="h-3 w-3 text-amber-400 fill-amber-400/20" />
-                        <span>{repo.stars}</span>
+                        <Clock className="h-3 w-3 text-indigo-400" />
+                        <span>{formatPushedDate(repo.last_pushed_at)}</span>
                       </div>
-                    </td>
-
-                    <td className="px-4 py-3.5 text-[11px] text-muted-foreground font-mono">
-                      {repo.last_pushed_at ? new Date(repo.last_pushed_at).toLocaleDateString() : '-'}
                     </td>
 
                     <td className="px-4 py-3.5">
@@ -415,13 +491,16 @@ export function RepoHealthTable({
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <RepoHealthBadge score={repo.latest_scan?.health_score} />
+                      <RepoHealthBadge
+                        score={repo.latest_scan?.resume_score ?? repo.latest_scan?.health_score}
+                        tier={repo.latest_scan?.portfolio_tier}
+                      />
                     </td>
 
                     <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <a
-                          href={`https://github.com/${repo.full_name}`}
+                          href={repo.html_url || `https://github.com/${repo.full_name}`}
                           target="_blank"
                           rel="noreferrer"
                           className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
@@ -475,8 +554,8 @@ export function RepoHealthTable({
               onClick={() => onBatchScan(selectedList)}
               className="h-8 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 gap-1.5 rounded-xl"
             >
-              <ShieldAlert className="h-3.5 w-3.5" />
-              Batch Scan Security ({selectedCount})
+              <Trophy className="h-3.5 w-3.5 text-amber-400" />
+              Batch Evaluate Portfolio Impact ({selectedCount})
             </Button>
           </div>
         </div>

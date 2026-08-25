@@ -45,7 +45,7 @@ class ResumeAnalysisRequest(BaseModel):
 class ResumeExportPDFRequest(BaseModel):
     name: Optional[str] = "Candidate"
     target_role: str = Field(..., min_length=1, max_length=200)
-    contact: Optional[Dict[str, str]] = Field(default_factory=dict)
+    contact: Optional[Dict[str, Optional[str]]] = Field(default_factory=dict)
     summary: Optional[str] = ""
     experience: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     skills: Optional[List[str]] = Field(default_factory=list)

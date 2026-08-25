@@ -8,13 +8,32 @@ export const useRepos = (healthFilter?: string) => {
   });
 };
 
+export const useLatestRepo = () => {
+  return useQuery({
+    queryKey: ['latestRepo'],
+    queryFn: () => githubApi.getLatestRepo()
+  });
+};
+
 export const useSyncRepos = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: githubApi.syncRepos,
     onSuccess: () => {
-      // In a real app, we might poll or wait, but here we just invalidate
       queryClient.invalidateQueries({ queryKey: ['repos'] });
+      queryClient.invalidateQueries({ queryKey: ['latestRepo'] });
+    }
+  });
+};
+
+export const useEvaluateRepo = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { repoFullName: string; targetRole?: string }) =>
+      githubApi.evaluateRepo(payload.repoFullName, payload.targetRole),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repos'] });
+      queryClient.invalidateQueries({ queryKey: ['latestRepo'] });
     }
   });
 };

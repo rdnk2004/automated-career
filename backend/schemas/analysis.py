@@ -67,7 +67,7 @@ class CareerMetricsResponse(BaseModel):
 
 class ParsedResumeResponse(BaseModel):
     name: Optional[str] = "Candidate"
-    contact: Dict[str, str] = {}
+    contact: Dict[str, Optional[str]] = {}
     summary: Optional[str] = ""
     experience: List[Dict[str, Any]] = []
     skills: List[str] = []

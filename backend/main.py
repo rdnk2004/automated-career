@@ -1,19 +1,54 @@
 import logging
 import time
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+
 from routers import profile, github, jobs, analysis, settings
 from config import settings as app_settings
+from database import engine
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from limiter import limiter
+from services.task_manager import task_manager
+from schemas.github import TaskStatusResponse
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("career_os")
 
-app = FastAPI(title="Career OS API", version="1.0.0")
+SCHEMA_PATCH_STATEMENTS = [
+    "ALTER TABLE github_repos ADD COLUMN IF NOT EXISTS forks_count INTEGER DEFAULT 0;",
+    "ALTER TABLE github_repos ADD COLUMN IF NOT EXISTS open_issues_count INTEGER DEFAULT 0;",
+    "ALTER TABLE github_repos ADD COLUMN IF NOT EXISTS size_kb INTEGER DEFAULT 0;",
+    "ALTER TABLE github_repos ADD COLUMN IF NOT EXISTS default_branch VARCHAR DEFAULT 'main';",
+    "ALTER TABLE github_repos ADD COLUMN IF NOT EXISTS license_name VARCHAR;",
+    "ALTER TABLE github_repos ADD COLUMN IF NOT EXISTS html_url VARCHAR;",
+    "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS resume_score INTEGER;",
+    "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS portfolio_tier VARCHAR;",
+    "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS key_technologies TEXT[];",
+    "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS architecture_summary TEXT;",
+    "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS resume_bullets JSONB;",
+    "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS recommendation_reason TEXT;",
+    "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS production_readiness JSONB;",
+]
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Ensure database schema columns exist on startup without manual SQL steps."""
+    try:
+        async with engine.begin() as conn:
+            for stmt in SCHEMA_PATCH_STATEMENTS:
+                await conn.execute(text(stmt))
+            logger.info("Verified PostgreSQL github_repos and repo_scans schema columns on startup")
+    except Exception as e:
+        logger.warning(f"Auto-migration check notice: {e}")
+    yield
+
+
+app = FastAPI(title="Career OS API", version="1.0.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -54,9 +89,6 @@ async def verify_api_key(request: Request):
     if provided != auth_key:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
-
-from services.task_manager import task_manager
-from schemas.github import TaskStatusResponse
 
 # --- Health Check ---
 @app.get("/health")

@@ -1,8 +1,10 @@
-import { useRepos, useSyncRepos, useScanRepo, useScanBatchRepos } from '@/hooks/useGithubRepos';
+import { useMemo } from 'react';
+import { useRepos, useSyncRepos, useEvaluateRepo, useScanBatchRepos } from '@/hooks/useGithubRepos';
 import { useGithubStore } from '@/stores/githubStore';
 import { toast } from '@/hooks/useToast';
 import { RepoHealthTable } from '@/components/github/RepoHealthTable';
-import { SecurityScanPanel } from '@/components/github/SecurityScanPanel';
+import { LatestRepoSpotlight } from '@/components/github/LatestRepoSpotlight';
+import { ProjectIntelligencePanel } from '@/components/github/ProjectIntelligencePanel';
 import { ReadmeGenerator } from '@/components/github/ReadmeGenerator';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -11,13 +13,17 @@ import { GithubRepo } from '@/types/github';
 import {
   Github as GithubIcon,
   RefreshCw,
-  ShieldAlert,
   FolderGit2,
-  Lock,
   FileText,
   Star,
+  GitFork,
+  AlertCircle,
+  HardDrive,
+  Scale,
   ExternalLink,
   GitBranch,
+  Trophy,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -35,8 +41,19 @@ export default function GitHub() {
 
   const { data: repos, isLoading } = useRepos();
   const { mutate: syncRepos, isPending: isSyncing } = useSyncRepos();
-  const { mutate: scanRepo, isPending: isScanning } = useScanRepo();
+  const { mutate: evaluateRepo, isPending: isEvaluating } = useEvaluateRepo();
   const { mutate: scanBatchRepos, isPending: isScanningBatch } = useScanBatchRepos();
+
+  // Find the single most recently committed repository
+  const latestCommittedRepo = useMemo(() => {
+    if (!repos || repos.length === 0) return null;
+    const sorted = [...repos].sort((a, b) => {
+      const aDate = a.last_pushed_at ? new Date(a.last_pushed_at).getTime() : 0;
+      const bDate = b.last_pushed_at ? new Date(b.last_pushed_at).getTime() : 0;
+      return bDate - aDate;
+    });
+    return sorted[0];
+  }, [repos]);
 
   const selectedRepo = repos?.find((r) => r.id === selectedRepoId) || null;
 
@@ -48,23 +65,36 @@ export default function GitHub() {
     });
   };
 
-  const handleScanCurrent = () => {
-    if (!selectedRepo) return;
-    toast.ai('Scanning Repository Security...', `Inspecting ${selectedRepo.full_name}`);
-    scanRepo(selectedRepo.full_name, {
-      onSuccess: () => toast.success('Security Scan Complete!'),
-      onError: (err: any) => toast.error('Scan Failed', err?.message),
-    });
+  const handleEvaluateRepo = (targetRepo: GithubRepo) => {
+    setSelectedRepo(targetRepo.id, targetRepo.full_name);
+    toast.ai('Analyzing Codebase Architecture...', `Evaluating resume impact for ${targetRepo.full_name}`);
+    evaluateRepo(
+      { repoFullName: targetRepo.full_name },
+      {
+        onSuccess: (data: any) => {
+          toast.success(
+            'Project Evaluation Complete!',
+            `${data.portfolio_tier || 'Tier 1'} • Resume Impact: ${data.resume_score || 85}%`
+          );
+        },
+        onError: (err: any) => toast.error('Evaluation Failed', err?.message),
+      }
+    );
   };
 
-  const handleBatchScan = (fullNames: string[]) => {
-    toast.ai('Batch Scanning Repositories...', `Running security audit on ${fullNames.length} repos`);
+  const handleOpenReadme = (targetRepo: GithubRepo) => {
+    setSelectedRepo(targetRepo.id, targetRepo.full_name);
+    setStudioTab('readme');
+  };
+
+  const handleBatchEvaluate = (fullNames: string[]) => {
+    toast.ai('Batch Evaluating Repositories...', `Inspecting code & architecture across ${fullNames.length} repos`);
     scanBatchRepos(fullNames, {
       onSuccess: () => {
         clearSelectedRepos();
-        toast.success('Batch Security Scan Finished!');
+        toast.success('Batch Portfolio Evaluation Finished!');
       },
-      onError: (err: any) => toast.error('Batch Scan Failed', err?.message),
+      onError: (err: any) => toast.error('Batch Evaluation Failed', err?.message),
     });
   };
 
@@ -82,6 +112,14 @@ export default function GitHub() {
     }
   };
 
+  const formatSize = (sizeKb?: number) => {
+    if (!sizeKb || sizeKb === 0) return null;
+    if (sizeKb >= 1024) {
+      return `${(sizeKb / 1024).toFixed(1)} MB`;
+    }
+    return `${sizeKb} KB`;
+  };
+
   return (
     <div className="flex flex-col lg:flex-row h-full overflow-hidden animate-fade-in">
       {/* Left Column: Repository Portfolio Table */}
@@ -94,10 +132,10 @@ export default function GitHub() {
                 <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm">
                   <GithubIcon className="h-5 w-5" />
                 </div>
-                GitHub Portfolio
+                Portfolio & Project Intelligence
               </h2>
               <p className="text-xs text-muted-foreground">
-                Inspect repository security, hardcoded secrets & missing README files
+                Evaluate repository codebase depth, generate quantified resume bullets & author AI READMEs
               </p>
             </div>
 
@@ -111,6 +149,17 @@ export default function GitHub() {
             </Button>
           </div>
 
+          {/* Spotlight on Latest Committed Repo */}
+          {!isLoading && latestCommittedRepo && (
+            <LatestRepoSpotlight
+              repo={latestCommittedRepo}
+              onSelect={handleSelectRepo}
+              onOpenReadme={handleOpenReadme}
+              onEvaluate={handleEvaluateRepo}
+              isSelected={selectedRepoId === latestCommittedRepo.id}
+            />
+          )}
+
           {/* Table or Skeleton Loading */}
           {isLoading ? (
             <TableSkeleton rows={6} cols={6} />
@@ -123,7 +172,7 @@ export default function GitHub() {
               onToggleSelect={toggleSelectRepo}
               onToggleSelectAll={handleToggleSelectAll}
               onClearSelection={clearSelectedRepos}
-              onBatchScan={handleBatchScan}
+              onBatchScan={handleBatchEvaluate}
               isBatchScanning={isScanningBatch}
             />
           )}
@@ -141,14 +190,18 @@ export default function GitHub() {
                   <h2 className="text-lg font-bold font-heading text-foreground flex items-center gap-2">
                     <FolderGit2 className="h-5 w-5 text-indigo-400" />
                     <span>{selectedRepo.name}</span>
-                    {selectedRepo.is_private && (
+                    {selectedRepo.is_private ? (
                       <Badge variant="outline" className="text-[10px] bg-slate-800 text-muted-foreground border-border/40 font-mono">
                         Private
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/20 font-mono">
+                        Public
                       </Badge>
                     )}
                   </h2>
                   <a
-                    href={`https://github.com/${selectedRepo.full_name}`}
+                    href={selectedRepo.html_url || `https://github.com/${selectedRepo.full_name}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs font-mono text-muted-foreground hover:text-indigo-300 transition-colors flex items-center gap-1 mt-0.5"
@@ -160,13 +213,12 @@ export default function GitHub() {
 
                 <div className="flex items-center gap-2">
                   <Button
-                    onClick={handleScanCurrent}
-                    disabled={isScanning}
-                    variant="outline"
-                    className="text-xs rounded-xl h-9 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 gap-1.5"
+                    onClick={() => handleEvaluateRepo(selectedRepo)}
+                    disabled={isEvaluating}
+                    className="text-xs rounded-xl h-9 bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 gap-1.5 font-semibold"
                   >
-                    <ShieldAlert className={`h-3.5 w-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-                    {isScanning ? 'Scanning...' : 'Scan Security'}
+                    <Trophy className={`h-3.5 w-3.5 text-amber-300 ${isEvaluating ? 'animate-spin' : ''}`} />
+                    {isEvaluating ? 'Inspecting Code...' : 'Evaluate Resume Impact'}
                   </Button>
                 </div>
               </div>
@@ -177,12 +229,34 @@ export default function GitHub() {
                 </p>
               )}
 
-              {/* Repo Quick Stats */}
-              <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground pt-1">
+              {/* Repo Quick Stats Grid */}
+              <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground pt-1 border-t border-border/20">
                 <div className="flex items-center gap-1">
                   <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400/20" />
-                  <span>{selectedRepo.stars} stars</span>
+                  <span>{selectedRepo.stars || 0} stars</span>
                 </div>
+                <div className="flex items-center gap-1">
+                  <GitFork className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>{selectedRepo.forks_count ?? 0} forks</span>
+                </div>
+                {selectedRepo.open_issues_count ? (
+                  <div className="flex items-center gap-1 text-rose-400">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span>{selectedRepo.open_issues_count} issues</span>
+                  </div>
+                ) : null}
+                {formatSize(selectedRepo.size_kb) && (
+                  <div className="flex items-center gap-1">
+                    <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
+                    <span>{formatSize(selectedRepo.size_kb)}</span>
+                  </div>
+                )}
+                {selectedRepo.license_name && (
+                  <div className="flex items-center gap-1">
+                    <Scale className="h-3.5 w-3.5 text-purple-400" />
+                    <span>{selectedRepo.license_name}</span>
+                  </div>
+                )}
                 {selectedRepo.language && (
                   <div className="flex items-center gap-1">
                     <GitBranch className="h-3.5 w-3.5 text-indigo-400" />
@@ -200,16 +274,16 @@ export default function GitHub() {
             {/* Inspector Navigation Tabs */}
             <div className="flex items-center gap-1.5 p-1 bg-secondary/30 rounded-2xl border border-border/40 text-xs">
               <button
-                onClick={() => setStudioTab('security')}
+                onClick={() => setStudioTab('overview')}
                 className={cn(
                   'flex items-center gap-2 px-4 py-2 font-semibold rounded-xl transition-all select-none',
-                  studioTab === 'security' || studioTab === 'overview'
+                  studioTab === 'overview' || studioTab === 'security'
                     ? 'bg-primary text-primary-foreground shadow-md'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <Lock className="h-3.5 w-3.5" />
-                Security Audit
+                <Trophy className="h-3.5 w-3.5 text-amber-300" />
+                Resume Intelligence
               </button>
 
               <button
@@ -227,8 +301,13 @@ export default function GitHub() {
             </div>
 
             {/* Tab Views */}
-            {(studioTab === 'security' || studioTab === 'overview') && (
-              <SecurityScanPanel scan={selectedRepo.latest_scan} />
+            {(studioTab === 'overview' || studioTab === 'security') && (
+              <ProjectIntelligencePanel
+                scan={selectedRepo.latest_scan}
+                repoFullName={selectedRepo.full_name}
+                onEvaluate={() => handleEvaluateRepo(selectedRepo)}
+                isEvaluating={isEvaluating}
+              />
             )}
 
             {studioTab === 'readme' && (
@@ -243,12 +322,12 @@ export default function GitHub() {
           /* Empty Placeholder */
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 p-8">
             <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 shadow-glow">
-              <GithubIcon className="h-8 w-8" />
+              <Sparkles className="h-8 w-8" />
             </div>
             <div className="space-y-1 text-center">
               <h4 className="font-bold font-heading text-foreground text-sm">Select a Repository</h4>
               <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                Click any repository in the portfolio list to run security audits, review leaked secrets, or generate a professional README.
+                Click any repository in the portfolio list to evaluate resume-worthiness, extract quantified bullet points, and generate an elite README.
               </p>
             </div>
           </div>

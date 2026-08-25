@@ -1,39 +1,44 @@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, AlertTriangle, ShieldAlert, Sparkles, HelpCircle } from 'lucide-react';
+import { Trophy, Sparkles, HelpCircle, Code2 } from 'lucide-react';
 
-export function RepoHealthBadge({ score }: { score?: number | null }) {
+export function RepoHealthBadge({
+  score,
+  tier,
+}: {
+  score?: number | null;
+  tier?: string | null;
+}) {
   if (score === undefined || score === null) {
     return (
-      <Tooltip content="Not scanned yet. Click 'Scan Security' to audit this repo.">
+      <Tooltip content="Not evaluated yet. Click 'Evaluate' to analyze resume-worthiness.">
         <Badge
           variant="outline"
           className="text-muted-foreground/70 border-border/40 font-mono text-[10px] bg-secondary/30 flex items-center gap-1 cursor-default select-none"
         >
           <HelpCircle className="h-3 w-3" />
-          <span>Unscanned</span>
+          <span>Unassessed</span>
         </Badge>
       </Tooltip>
     );
   }
 
-  let colorClass = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
-  let Icon = CheckCircle2;
-  let tooltipText = `Health Score: ${score}/100. Repository has README, no leaked credentials, and clean structure.`;
+  const isTier1 = tier?.toLowerCase().includes('tier 1') || tier?.toLowerCase().includes('flagship') || score >= 85;
+  const isTier2 = tier?.toLowerCase().includes('tier 2') || tier?.toLowerCase().includes('supporting') || score >= 65;
 
-  if (score <= 50) {
-    colorClass = 'bg-rose-500/15 text-rose-300 border-rose-500/30';
-    Icon = ShieldAlert;
-    tooltipText = `Health Score: ${score}/100. Action required: Potential leaked secrets or missing .gitignore/.env risk detected.`;
-  } else if (score <= 75) {
-    colorClass = 'bg-amber-500/15 text-amber-300 border-amber-500/30';
-    Icon = AlertTriangle;
-    tooltipText = `Health Score: ${score}/100. Missing README or low documentation quality.`;
-  } else if (score < 90) {
+  let colorClass = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+  let Icon = Trophy;
+  let tooltipText = `Resume Impact Score: ${score}/100. Flagship project with high technical depth and architectural complexity.`;
+
+  if (!isTier1 && isTier2) {
     colorClass = 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30';
     Icon = Sparkles;
-    tooltipText = `Health Score: ${score}/100. Good quality, minor improvements suggested.`;
+    tooltipText = `Resume Impact Score: ${score}/100. Strong supporting project demonstrating solid domain execution.`;
+  } else if (!isTier1 && !isTier2) {
+    colorClass = 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+    Icon = Code2;
+    tooltipText = `Resume Impact Score: ${score}/100. Auxiliary utility or practice script.`;
   }
 
   return (
@@ -45,8 +50,8 @@ export function RepoHealthBadge({ score }: { score?: number | null }) {
           colorClass
         )}
       >
-        <Icon className="h-3 w-3" />
-        <span>{score}/100</span>
+        <Icon className="h-3 w-3 shrink-0" />
+        <span>{score}%</span>
       </Badge>
     </Tooltip>
   );
