@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, List, Literal
 from datetime import datetime
 from uuid import UUID
 
@@ -31,3 +31,19 @@ class JDKeywordResponse(BaseModel):
     last_seen_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class TrendKeywordItem(BaseModel):
+    keyword: str
+    current_frequency: int
+    previous_frequency: int
+    velocity_percent: float
+    is_technical: bool
+    status: Literal['rising', 'stable', 'falling']
+
+class JobTrendsResponse(BaseModel):
+    target_role: str
+    days: int
+    total_analyzed: int
+    rising: List[TrendKeywordItem]
+    stable: List[TrendKeywordItem]
+    falling: List[TrendKeywordItem]
