@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from routers import profile, github, jobs, analysis, settings
+from routers import profile, github, jobs, analysis, settings, resumes
 from config import settings as app_settings
 from database import engine
 from slowapi import _rate_limit_exceeded_handler
@@ -33,6 +33,22 @@ SCHEMA_PATCH_STATEMENTS = [
     "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS resume_bullets JSONB;",
     "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS recommendation_reason TEXT;",
     "ALTER TABLE repo_scans ADD COLUMN IF NOT EXISTS production_readiness JSONB;",
+    """
+    CREATE TABLE IF NOT EXISTS targeted_resumes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR NOT NULL,
+        target_role VARCHAR NOT NULL,
+        raw_text TEXT NOT NULL,
+        parsed_data JSONB,
+        match_score INTEGER,
+        bs_factor DOUBLE PRECISION,
+        last_analysis JSONB,
+        is_primary BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_targeted_resumes_role ON targeted_resumes(target_role);",
 ]
 
 @asynccontextmanager
@@ -133,5 +149,11 @@ app.include_router(
     settings.router,
     prefix="/api/settings",
     tags=["settings"],
+    dependencies=[Depends(verify_api_key)],
+)
+app.include_router(
+    resumes.router,
+    prefix="/api/resumes",
+    tags=["resumes"],
     dependencies=[Depends(verify_api_key)],
 )

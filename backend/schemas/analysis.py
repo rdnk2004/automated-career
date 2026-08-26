@@ -75,3 +75,76 @@ class ParsedResumeResponse(BaseModel):
     certifications: List[str] = []
     raw_text: str
     word_count: int
+
+
+# --- Resume Destroyer Schemas ---
+
+class SectionBsFactor(BaseModel):
+    section_name: str
+    bs_factor: float
+    critique: str
+
+
+class RecommendedProject(BaseModel):
+    repo_full_name: str
+    name: str
+    html_url: Optional[str] = None
+    match_rationale: str
+    key_technologies: List[str] = []
+    suggested_bullets: List[str] = []
+    stars: int = 0
+
+
+class CompetitiveAnalysis(BaseModel):
+    realistic_level: str
+    critical_differentiators: List[str] = []
+    development_priorities: List[str] = []
+    market_benchmark_summary: str
+
+
+class ResumeDestroyerResponse(BaseModel):
+    match_score: int
+    overall_bs_factor: float
+    section_bs_factors: List[SectionBsFactor] = []
+    critical_flaws: List[str] = []
+    ats_red_flags: List[str] = []
+    recommended_projects: List[RecommendedProject] = []
+    bullet_rewrites: List[BulletRewrite] = []
+    competitive_analysis: CompetitiveAnalysis
+    gap_keywords: List[KeywordGap] = []
+    evidence_refs: List[str] = []
+
+
+# --- Targeted Resume CRUD Schemas ---
+
+class TargetedResumeCreate(BaseModel):
+    title: str
+    target_role: str
+    raw_text: str
+    parsed_data: Optional[Dict[str, Any]] = None
+    is_primary: Optional[bool] = False
+
+
+class TargetedResumeUpdate(BaseModel):
+    title: Optional[str] = None
+    target_role: Optional[str] = None
+    raw_text: Optional[str] = None
+    parsed_data: Optional[Dict[str, Any]] = None
+    is_primary: Optional[bool] = None
+
+
+class TargetedResumeResponse(BaseModel):
+    id: UUID
+    title: str
+    target_role: str
+    raw_text: str
+    parsed_data: Optional[Dict[str, Any]] = None
+    match_score: Optional[int] = None
+    bs_factor: Optional[float] = None
+    last_analysis: Optional[Dict[str, Any]] = None
+    is_primary: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -43,6 +43,8 @@ def test_openapi_schema_generation():
         "/api/settings/",
         "/api/settings/n8n-status",
         "/api/settings/reset",
+        "/api/resumes",
+        "/api/resumes/{resume_id}",
     ]
 
     for route in essential_routes:

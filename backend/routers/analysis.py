@@ -16,6 +16,7 @@ from schemas.analysis import (
     SuggestionSetResponse,
     CareerScoreResponse,
     ResumeSuggestionResponse,
+    ResumeDestroyerResponse,
     ScoreSnapshotItem,
     CareerScoreHistoryResponse,
     CareerMetricsResponse,
@@ -104,7 +105,7 @@ async def analyze_linkedin(request: Request, req: LinkedInAnalysisRequest, db: A
     return suggestion_set
 
 
-@router.post("/resume", response_model=ResumeSuggestionResponse)
+@router.post("/resume", response_model=ResumeDestroyerResponse)
 @limiter.limit("5/minute")
 async def analyze_resume(request: Request, req: ResumeAnalysisRequest, db: AsyncSession = Depends(get_db)):
     res_kw = await db.execute(
@@ -115,8 +116,23 @@ async def analyze_resume(request: Request, req: ResumeAnalysisRequest, db: Async
     )
     jd_keywords = [kw.keyword for kw in res_kw.scalars().all()]
 
-    res_repo = await db.execute(select(GithubRepo).order_by(GithubRepo.stars.desc()).limit(5))
-    github_projects = [repo.name for repo in res_repo.scalars().all()]
+    res_repo = await db.execute(
+        select(GithubRepo)
+        .where(GithubRepo.is_private == False)
+        .order_by(GithubRepo.stars.desc(), GithubRepo.last_pushed_at.desc().nullslast())
+        .limit(15)
+    )
+    db_repos = res_repo.scalars().all()
+    github_projects = [
+        {
+            "name": repo.name,
+            "full_name": repo.full_name,
+            "description": repo.description,
+            "language": repo.language,
+            "stars": repo.stars,
+        }
+        for repo in db_repos
+    ]
 
     try:
         suggestion = await analyze_resume_agent(req.resume_text, req.target_role, jd_keywords, github_projects)
