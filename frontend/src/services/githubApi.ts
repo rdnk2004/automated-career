@@ -11,8 +11,26 @@ export const githubApi = {
     const res = await api.get('/api/github/latest');
     return res.data;
   },
-  syncRepos: async (): Promise<{ task_id: string, status: string }> => {
+  syncRepos: async (): Promise<{ task_id: string; status: string; result?: any }> => {
     const res = await api.post('/api/github/sync');
+    const taskId = res.data?.task_id;
+    if (!taskId) return res.data;
+
+    const startTime = Date.now();
+    while (Date.now() - startTime < 30000) {
+      await new Promise((r) => setTimeout(r, 400));
+      try {
+        const taskRes = await api.get(`/api/github/tasks/${taskId}`);
+        if (taskRes.data.status === 'completed') {
+          return { task_id: taskId, status: 'completed', result: taskRes.data.result };
+        }
+        if (taskRes.data.status === 'failed') {
+          throw new Error(taskRes.data.error || 'Sync task failed');
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('Sync task failed')) throw err;
+      }
+    }
     return res.data;
   },
   evaluateRepo: async (repoFullName: string, targetRole?: string): Promise<any> => {
@@ -26,12 +44,30 @@ export const githubApi = {
     const res = await api.post('/api/github/scan', { repo_full_name: repoFullName });
     return res.data;
   },
-  scanAllRepos: async (): Promise<{ status: string, message: string }> => {
+  scanAllRepos: async (): Promise<{ status: string; message: string }> => {
     const res = await api.post('/api/github/scan/all');
     return res.data;
   },
-  scanBatchRepos: async (repoFullNames: string[]): Promise<{ status: string, message: string }> => {
+  scanBatchRepos: async (repoFullNames: string[]): Promise<{ task_id?: string; status: string; message: string }> => {
     const res = await api.post('/api/github/scan/batch', { repo_full_names: repoFullNames });
+    const taskId = res.data?.task_id;
+    if (!taskId) return res.data;
+
+    const startTime = Date.now();
+    while (Date.now() - startTime < 60000) {
+      await new Promise((r) => setTimeout(r, 600));
+      try {
+        const taskRes = await api.get(`/api/github/tasks/${taskId}`);
+        if (taskRes.data.status === 'completed') {
+          return { task_id: taskId, status: 'completed', message: 'Batch evaluation completed' };
+        }
+        if (taskRes.data.status === 'failed') {
+          throw new Error(taskRes.data.error || 'Batch scan failed');
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('Batch scan failed')) throw err;
+      }
+    }
     return res.data;
   },
   generateReadme: async (repoFullName: string, style: string = 'recruiter'): Promise<{ readme_markdown: string; suggestion_id?: string }> => {

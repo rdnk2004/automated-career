@@ -70,7 +70,16 @@ async def sync_repos_task(task_id: str):
                     r_name, r_info = res
                     readme_map[r_name] = r_info
 
-            task_manager.update_progress(task_id, completed_steps=2, message=f"Persisting {total} repositories & README status to database...")
+            task_manager.update_progress(task_id, completed_steps=2, message=f"Reconciling database (pruning private/stale repos)...")
+
+            # Prune any repositories from DB that are private or no longer in GitHub public list
+            synced_github_ids = {r['id'] for r in repos if 'id' in r}
+            db_all_res = await db.execute(select(GithubRepo))
+            existing_db_repos = db_all_res.scalars().all()
+            for existing_repo in existing_db_repos:
+                if existing_repo.github_id not in synced_github_ids or existing_repo.is_private:
+                    logger.info(f"Removing private/stale repo from database: {existing_repo.full_name}")
+                    await db.delete(existing_repo)
 
             for i, repo_data in enumerate(repos, 1):
                 result = await db.execute(
@@ -86,7 +95,7 @@ async def sync_repos_task(task_id: str):
                 repo.description = repo_data.get('description')
                 repo.language = repo_data.get('language')
                 repo.topics = repo_data.get('topics', [])
-                repo.is_private = repo_data.get('private', False)
+                repo.is_private = False  # Strictly public
                 repo.stars = repo_data.get('stargazers_count', 0)
                 repo.forks_count = repo_data.get('forks_count', 0)
                 repo.open_issues_count = repo_data.get('open_issues_count', 0)
@@ -113,7 +122,7 @@ async def sync_repos_task(task_id: str):
 
             await db.commit()
             task_manager.complete_task(task_id, result={"synced_count": total})
-            logger.info(f"Synced {total} repos from GitHub with rich stats and README status")
+            logger.info(f"Synced {total} public & collaborated repos from GitHub with rich stats and README status")
         except Exception as e:
             logger.error(f"sync_repos_task failed: {e}")
             task_manager.fail_task(task_id, str(e))
@@ -234,7 +243,11 @@ async def get_repos(
     health: Optional[str] = Query(None, description="needs_readme|tier1|all"),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(GithubRepo).order_by(GithubRepo.last_pushed_at.desc().nullslast(), GithubRepo.stars.desc())
+    query = (
+        select(GithubRepo)
+        .where(GithubRepo.is_private == False)
+        .order_by(GithubRepo.last_pushed_at.desc().nullslast(), GithubRepo.stars.desc())
+    )
     result = await db.execute(query)
     repos = result.scalars().all()
 
@@ -282,11 +295,11 @@ async def get_repos(
 @router.get("/latest", response_model=Optional[GithubRepoResponse])
 async def get_latest_pushed_repo(db: AsyncSession = Depends(get_db)):
     """
-    Get the single most recently committed/pushed repository with its scan.
+    Get the single most recently committed/pushed public repository with its scan.
     """
     query = (
         select(GithubRepo)
-        .where(GithubRepo.last_pushed_at.isnot(None))
+        .where((GithubRepo.is_private == False) & (GithubRepo.last_pushed_at.isnot(None)))
         .order_by(GithubRepo.last_pushed_at.desc())
         .limit(1)
     )
@@ -294,7 +307,12 @@ async def get_latest_pushed_repo(db: AsyncSession = Depends(get_db)):
     repo = result.scalars().first()
 
     if not repo:
-        res_any = await db.execute(select(GithubRepo).order_by(GithubRepo.stars.desc()).limit(1))
+        res_any = await db.execute(
+            select(GithubRepo)
+            .where(GithubRepo.is_private == False)
+            .order_by(GithubRepo.stars.desc())
+            .limit(1)
+        )
         repo = res_any.scalars().first()
 
     if not repo:

@@ -58,9 +58,9 @@ export default function GitHub() {
   const selectedRepo = repos?.find((r) => r.id === selectedRepoId) || null;
 
   const handleSync = () => {
-    toast.info('Syncing GitHub Repositories...', 'Fetching public and private repositories');
+    toast.info('Syncing GitHub Repositories...', 'Fetching public and collaborated repositories');
     syncRepos(undefined, {
-      onSuccess: () => toast.success('GitHub Sync Complete!'),
+      onSuccess: () => toast.success('GitHub Sync Complete!', 'Public and collaborated repositories updated'),
       onError: (err: any) => toast.error('Sync Failed', err?.message),
     });
   };

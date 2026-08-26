@@ -80,11 +80,12 @@ class GitHubService:
 
     async def get_all_repos(self) -> List[Dict[str, Any]]:
         """
-        Fetch all repositories for the configured account.
+        Fetch all public repositories for the configured account, including collaborated repos.
+        Explicitly excludes any private repositories.
         Tries authenticated /user/repos first; falls back gracefully to public /users/{username}/repos.
         """
         username = settings.github_username or "rdnk2004"
-        repos = []
+        raw_repos = []
         has_pat = bool(settings.github_pat and settings.github_pat.strip() and not settings.github_pat.startswith("ghp_your"))
 
         if has_pat:
@@ -95,16 +96,22 @@ class GitHubService:
                         response = await self._get(
                             client,
                             "/user/repos",
-                            params={"per_page": 100, "page": page, "sort": "pushed", "direction": "desc"}
+                            params={
+                                "per_page": 100,
+                                "page": page,
+                                "sort": "pushed",
+                                "direction": "desc",
+                                "visibility": "public",
+                                "affiliation": "owner,collaborator,organization_member"
+                            }
                         )
                         data = response.json()
-                        if not data:
+                        if not data or not isinstance(data, list):
                             break
-                        repos.extend(data)
+                        raw_repos.extend(data)
                         page += 1
                         await asyncio.sleep(0.05)
-                logger.info(f"Successfully fetched {len(repos)} repos via authenticated GitHub PAT.")
-                return repos
+                logger.info(f"Successfully fetched {len(raw_repos)} public/collaborated repos via GitHub PAT.")
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 401:
                     logger.warning(f"GitHub PAT rejected (401 Unauthorized). Falling back to public repos for {username}...")
@@ -113,32 +120,45 @@ class GitHubService:
             except Exception as e:
                 logger.warning(f"Authenticated repo fetch exception ({e}). Falling back to public repos for {username}...")
 
-        # Fallback: Query public repositories for the username without requiring a PAT
-        page = 1
-        async with httpx.AsyncClient(base_url=self.base_url, headers=self.anon_headers, timeout=10.0) as client:
-            while True:
-                try:
-                    response = await self._get(
-                        client,
-                        f"/users/{username}/repos",
-                        params={"per_page": 100, "page": page, "sort": "pushed", "direction": "desc"}
-                    )
-                    data = response.json()
-                    if not data or not isinstance(data, list):
+        # Fallback if no PAT or if authenticated fetch failed
+        if not raw_repos:
+            page = 1
+            async with httpx.AsyncClient(base_url=self.base_url, headers=self.anon_headers, timeout=10.0) as client:
+                while True:
+                    try:
+                        response = await self._get(
+                            client,
+                            f"/users/{username}/repos",
+                            params={"per_page": 100, "page": page, "sort": "pushed", "direction": "desc", "type": "all"}
+                        )
+                        data = response.json()
+                        if not data or not isinstance(data, list):
+                            break
+                        raw_repos.extend(data)
+                        page += 1
+                        await asyncio.sleep(0.05)
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code == 404:
+                            logger.error(f"GitHub user {username} not found.")
                         break
-                    repos.extend(data)
-                    page += 1
-                    await asyncio.sleep(0.05)
-                except httpx.HTTPStatusError as e:
-                    if e.response.status_code == 404:
-                        logger.error(f"GitHub user {username} not found.")
-                    break
-                except Exception as e:
-                    logger.error(f"Public repo fetch error: {e}")
-                    break
+                    except Exception as e:
+                        logger.error(f"Public repo fetch error: {e}")
+                        break
 
-        logger.info(f"Fetched {len(repos)} public repos for {username}.")
-        return repos
+        # Deduplicate and strictly exclude any private repositories
+        seen_ids = set()
+        public_repos = []
+        for r in raw_repos:
+            if not isinstance(r, dict):
+                continue
+            r_id = r.get("id")
+            is_private = r.get("private", False)
+            if r_id and r_id not in seen_ids and not is_private:
+                seen_ids.add(r_id)
+                public_repos.append(r)
+
+        logger.info(f"Filtered to {len(public_repos)} clean public & collaborated repos for {username}.")
+        return public_repos
 
     async def get_repo_file_tree(self, repo_full_name: str) -> Dict[str, Any]:
         async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers, timeout=10.0) as client:
