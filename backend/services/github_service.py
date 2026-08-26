@@ -180,6 +180,46 @@ class GitHubService:
                     return None
                 raise
 
+    async def get_readme(self, repo_full_name: str) -> Dict[str, Any]:
+        """
+        Fetch the README metadata and decoded content from GitHub for a given repository.
+        Handles all standard README formats (README.md, README.txt, README.rst, etc.).
+        """
+        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers, timeout=10.0) as client:
+            try:
+                response = await self._get(client, f"/repos/{repo_full_name}/readme")
+                data = response.json()
+                content = None
+                if "content" in data and data.get("encoding") == "base64":
+                    content = base64.b64decode(data["content"]).decode('utf-8', errors='replace')
+                return {
+                    "has_readme": True,
+                    "content": content,
+                    "name": data.get("name", "README.md"),
+                    "path": data.get("path", "README.md")
+                }
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code in (401, 403):
+                    async with httpx.AsyncClient(base_url=self.base_url, headers=self.anon_headers, timeout=10.0) as anon_client:
+                        try:
+                            res = await self._get(anon_client, f"/repos/{repo_full_name}/readme")
+                            data = res.json()
+                            content = None
+                            if "content" in data and data.get("encoding") == "base64":
+                                content = base64.b64decode(data["content"]).decode('utf-8', errors='replace')
+                            return {
+                                "has_readme": True,
+                                "content": content,
+                                "name": data.get("name", "README.md"),
+                                "path": data.get("path", "README.md")
+                            }
+                        except Exception:
+                            return {"has_readme": False, "content": None, "name": None, "path": None}
+                return {"has_readme": False, "content": None, "name": None, "path": None}
+            except Exception as e:
+                logger.debug(f"Failed to fetch README for {repo_full_name}: {e}")
+                return {"has_readme": False, "content": None, "name": None, "path": None}
+
     async def inspect_repo_code(self, repo_full_name: str) -> Dict[str, Any]:
         """
         Deep code inspector: extracts file tree, identifies architecture manifests,
@@ -192,6 +232,13 @@ class GitHubService:
         tree_summary = "\n".join(file_paths[:60])
         if len(file_paths) > 60:
             tree_summary += f"\n... and {len(file_paths) - 60} more files"
+
+        # Detect README presence from file tree
+        has_readme = any(
+            p.lower() in ("readme.md", "readme.txt", "readme", "readme.rst", ".github/readme.md")
+            or p.lower().endswith("/readme.md")
+            for p in file_paths
+        )
 
         # Key architectural and manifest files to sample
         priority_files = [
@@ -219,6 +266,7 @@ class GitHubService:
             "file_tree": tree_summary or "Empty repository tree",
             "sample_code": "\n\n".join(sample_code_pieces) if sample_code_pieces else "No source code available",
             "detected_manifests": detected_manifests,
+            "has_readme": has_readme,
             "total_files": len(file_paths)
         }
 

@@ -1,5 +1,6 @@
 import json
 import logging
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,13 +43,34 @@ def parse_iso_datetime(dt_str: Optional[str]) -> Optional[datetime]:
 
 
 async def sync_repos_task(task_id: str):
-    """Sync all repos from GitHub API and track progress."""
+    """Sync all repos from GitHub API and track progress with full README verification."""
     task_manager.update_progress(task_id, completed_steps=0, message="Connecting to GitHub API...")
     async with AsyncSessionLocal() as db:
         try:
             repos = await github_service.get_all_repos()
             total = len(repos)
-            task_manager.update_progress(task_id, completed_steps=1, message=f"Fetched {total} repos from GitHub. Persisting to database...")
+            task_manager.update_progress(task_id, completed_steps=1, message=f"Fetched {total} repos from GitHub. Verifying README files...")
+
+            # Concurrently fetch README metadata & contents
+            semaphore = asyncio.Semaphore(8)
+            async def fetch_readme_info(repo_name: str):
+                async with semaphore:
+                    try:
+                        return repo_name, await github_service.get_readme(repo_name)
+                    except Exception as e:
+                        logger.debug(f"Readme fetch error for {repo_name}: {e}")
+                        return repo_name, {"has_readme": False, "content": None}
+
+            readme_tasks = [fetch_readme_info(r['full_name']) for r in repos if r.get('full_name')]
+            readme_results = await asyncio.gather(*readme_tasks, return_exceptions=True)
+            
+            readme_map = {}
+            for res in readme_results:
+                if isinstance(res, tuple):
+                    r_name, r_info = res
+                    readme_map[r_name] = r_info
+
+            task_manager.update_progress(task_id, completed_steps=2, message=f"Persisting {total} repositories & README status to database...")
 
             for i, repo_data in enumerate(repos, 1):
                 result = await db.execute(
@@ -83,9 +105,15 @@ async def sync_repos_task(task_id: str):
                 pushed_at_str = repo_data.get('pushed_at')
                 repo.last_pushed_at = parse_iso_datetime(pushed_at_str)
 
+                # Set README status & content
+                r_info = readme_map.get(repo.full_name, {})
+                repo.has_readme = r_info.get("has_readme", False)
+                if r_info.get("content"):
+                    repo.readme_content = r_info.get("content")
+
             await db.commit()
             task_manager.complete_task(task_id, result={"synced_count": total})
-            logger.info(f"Synced {total} repos from GitHub with rich stats")
+            logger.info(f"Synced {total} repos from GitHub with rich stats and README status")
         except Exception as e:
             logger.error(f"sync_repos_task failed: {e}")
             task_manager.fail_task(task_id, str(e))
@@ -112,6 +140,9 @@ async def scan_batch_repos_task(task_id: str, repo_full_names: List[str]):
                         message=f"Evaluating resume worthiness for {repo.full_name} ({i}/{total})..."
                     )
                     code_info = await github_service.inspect_repo_code(repo.full_name)
+                    if code_info.get("has_readme"):
+                        repo.has_readme = True
+
                     eval_data = await evaluate_portfolio_project(
                         repo_data={"name": repo.name, "full_name": repo.full_name, "description": repo.description, "language": repo.language, "stars": repo.stars, "forks_count": repo.forks_count},
                         file_tree=code_info.get("file_tree", ""),
@@ -163,6 +194,9 @@ async def scan_all_repos_task(task_id: str):
                         message=f"Evaluating {repo.full_name} ({i}/{total})..."
                     )
                     code_info = await github_service.inspect_repo_code(repo.full_name)
+                    if code_info.get("has_readme"):
+                        repo.has_readme = True
+
                     eval_data = await evaluate_portfolio_project(
                         repo_data={"name": repo.name, "full_name": repo.full_name, "description": repo.description, "language": repo.language, "stars": repo.stars, "forks_count": repo.forks_count},
                         file_tree=code_info.get("file_tree", ""),
@@ -301,6 +335,9 @@ async def evaluate_repo(req: EvaluateRepoRequest, db: AsyncSession = Depends(get
         raise HTTPException(status_code=404, detail="Repository not found")
 
     code_info = await github_service.inspect_repo_code(req.repo_full_name)
+    if code_info.get("has_readme"):
+        repo.has_readme = True
+
     eval_data = await evaluate_portfolio_project(
         repo_data={
             "name": repo.name,
@@ -409,7 +446,7 @@ async def generate_repo_readme(req: GenerateReadmeRequest, db: AsyncSession = De
 
 
 @router.post("/readme/push")
-async def push_repo_readme(body: dict):
+async def push_repo_readme(body: dict, db: AsyncSession = Depends(get_db)):
     repo_full_name = body.get("repo_full_name")
     content = body.get("content")
     if not repo_full_name or not content:
@@ -422,6 +459,16 @@ async def push_repo_readme(body: dict):
             content=content,
             message="docs: update README with AI architecture diagrams and setup guide"
         )
+        # Update repo README state in database
+        result = await db.execute(
+            select(GithubRepo).where(GithubRepo.full_name == repo_full_name)
+        )
+        repo = result.scalars().first()
+        if repo:
+            repo.has_readme = True
+            repo.readme_content = content
+            await db.commit()
+
         return {"committed": True, "sha": res.get("commit", {}).get("sha", "")}
     except Exception as e:
         logger.error(f"Failed to push README: {e}")
