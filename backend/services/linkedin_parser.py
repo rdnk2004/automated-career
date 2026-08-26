@@ -46,7 +46,7 @@ def parse_csv_content(csv_bytes: bytes) -> List[Dict[str, str]]:
 
 def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
     """
-    Parse a LinkedIn export ZIP file and extract key CSVs.
+    Parse a LinkedIn export ZIP file and extract all key CSVs.
     """
     result = {
         "profile": {},
@@ -54,12 +54,15 @@ def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
         "education": [],
         "skills": [],
         "certifications": [],
-        "languages": []
+        "projects": [],
+        "volunteer": [],
+        "honors": [],
+        "languages": [],
+        "publications": []
     }
     
     try:
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
-            # We look for files that end with these names to be defensive against folder structures in the ZIP
             file_names = z.namelist()
             
             for file_name in file_names:
@@ -73,7 +76,7 @@ def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
                             "headline": row.get("Headline", ""),
                             "summary": row.get("Summary", ""),
                             "location": row.get("Location", ""),
-                            "linkedin_url": row.get("Profile Link", "")
+                            "linkedin_url": row.get("Profile Link", "") or row.get("Websites", "")
                         }
                         
                 elif lower_name.endswith("positions.csv"):
@@ -83,6 +86,7 @@ def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
                             "title": row.get("Title", ""),
                             "company": row.get("Company Name", ""),
                             "description": row.get("Description", ""),
+                            "location": row.get("Location", ""),
                             "start_date": normalize_date(row.get("Started On", "")),
                             "end_date": normalize_date(row.get("Finished On", ""))
                         })
@@ -93,7 +97,7 @@ def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
                         result["education"].append({
                             "school": row.get("School Name", ""),
                             "degree": row.get("Degree Name", ""),
-                            "field": row.get("Notes", ""), # LinkedIn often puts field of study in Notes
+                            "field": row.get("Notes", "") or row.get("Field of Study", ""),
                             "start_date": normalize_date(row.get("Start Date", "")),
                             "end_date": normalize_date(row.get("End Date", ""))
                         })
@@ -110,7 +114,41 @@ def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
                         result["certifications"].append({
                             "name": row.get("Name", ""),
                             "authority": row.get("Authority", ""),
+                            "url": row.get("Url", ""),
                             "date": normalize_date(row.get("Started On", ""))
+                        })
+
+                elif lower_name.endswith("projects.csv"):
+                    rows = parse_csv_content(z.read(file_name))
+                    for row in rows:
+                        result["projects"].append({
+                            "title": row.get("Title", "") or row.get("Name", ""),
+                            "description": row.get("Description", ""),
+                            "url": row.get("Url", ""),
+                            "start_date": normalize_date(row.get("Started On", "")),
+                            "end_date": normalize_date(row.get("Finished On", ""))
+                        })
+
+                elif lower_name.endswith("volunteer.csv") or "volunteering" in lower_name:
+                    rows = parse_csv_content(z.read(file_name))
+                    for row in rows:
+                        result["volunteer"].append({
+                            "role": row.get("Role", "") or row.get("Title", ""),
+                            "organization": row.get("Organization", "") or row.get("Company Name", ""),
+                            "cause": row.get("Cause", ""),
+                            "description": row.get("Description", ""),
+                            "start_date": normalize_date(row.get("Started On", "")),
+                            "end_date": normalize_date(row.get("Finished On", ""))
+                        })
+
+                elif lower_name.endswith("honors.csv") or "awards" in lower_name:
+                    rows = parse_csv_content(z.read(file_name))
+                    for row in rows:
+                        result["honors"].append({
+                            "title": row.get("Title", "") or row.get("Name", ""),
+                            "issuer": row.get("Issuer", "") or row.get("Authority", ""),
+                            "description": row.get("Description", ""),
+                            "date": normalize_date(row.get("Issued On", ""))
                         })
                         
                 elif lower_name.endswith("languages.csv"):
@@ -121,9 +159,18 @@ def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
                                 "name": row.get("Name", ""),
                                 "proficiency": row.get("Proficiency", "")
                             })
+
+                elif lower_name.endswith("publications.csv"):
+                    rows = parse_csv_content(z.read(file_name))
+                    for row in rows:
+                        result["publications"].append({
+                            "name": row.get("Name", "") or row.get("Title", ""),
+                            "publisher": row.get("Publisher", ""),
+                            "description": row.get("Description", ""),
+                            "date": normalize_date(row.get("Published On", ""))
+                        })
                             
     except zipfile.BadZipFile:
-        # If it's not a valid zip, we just return empty structures
         pass
         
     return result
@@ -145,7 +192,7 @@ def to_profile_sections(parsed: Dict[str, Any]) -> List[Dict[str, Any]]:
         if prof.get("summary"):
             sections.append({
                 "section_type": "about",
-                "title": "About",
+                "title": "Summary",
                 "content": {"text": prof["summary"]}
             })
             
@@ -162,6 +209,13 @@ def to_profile_sections(parsed: Dict[str, Any]) -> List[Dict[str, Any]]:
             "title": edu.get("degree") or edu.get("school") or f"Education {idx+1}",
             "content": edu
         })
+
+    for idx, proj in enumerate(parsed.get("projects", [])):
+        sections.append({
+            "section_type": "projects",
+            "title": proj.get("title", f"Project {idx+1}"),
+            "content": proj
+        })
         
     if parsed.get("skills"):
         sections.append({
@@ -175,6 +229,27 @@ def to_profile_sections(parsed: Dict[str, Any]) -> List[Dict[str, Any]]:
             "section_type": "certifications",
             "title": cert.get("name", f"Certification {idx+1}"),
             "content": cert
+        })
+
+    for idx, vol in enumerate(parsed.get("volunteer", [])):
+        sections.append({
+            "section_type": "volunteer",
+            "title": vol.get("role") or vol.get("organization") or f"Volunteer {idx+1}",
+            "content": vol
+        })
+
+    for idx, award in enumerate(parsed.get("honors", [])):
+        sections.append({
+            "section_type": "awards",
+            "title": award.get("title", f"Award {idx+1}"),
+            "content": award
+        })
+
+    for idx, lang in enumerate(parsed.get("languages", [])):
+        sections.append({
+            "section_type": "languages",
+            "title": lang.get("name", f"Language {idx+1}"),
+            "content": lang
         })
         
     return sections
