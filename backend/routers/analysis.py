@@ -95,8 +95,26 @@ async def analyze_linkedin(request: Request, req: LinkedInAnalysisRequest, db: A
     )
     jd_keywords = [kw.keyword for kw in res_kw.scalars().all()]
 
+    res_repo = await db.execute(
+        select(GithubRepo)
+        .where(GithubRepo.is_private == False)
+        .order_by(GithubRepo.stars.desc(), GithubRepo.last_pushed_at.desc().nullslast())
+        .limit(15)
+    )
+    db_repos = res_repo.scalars().all()
+    github_projects = [
+        {
+            "name": repo.name,
+            "full_name": repo.full_name,
+            "description": repo.description,
+            "language": repo.language,
+            "stars": repo.stars,
+        }
+        for repo in db_repos
+    ]
+
     try:
-        suggestion_set = await analyze_linkedin_agent(profile_data, req.target_role, jd_keywords)
+        suggestion_set = await analyze_linkedin_agent(profile_data, req.target_role, jd_keywords, github_projects)
     except (RuntimeError, ValueError) as e:
         logger.error(f"LinkedIn analysis failed: {e}")
         raise HTTPException(status_code=502, detail=f"AI analysis failed: {e}")

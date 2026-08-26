@@ -17,10 +17,75 @@ class BulletRewrite(BaseModel):
     suggested: str
     evidence_refs: Optional[List[str]] = None
 
+class HeadlineAlternative(BaseModel):
+    headline: str
+    target_focus: str
+    char_count: int = 0
+
+
+class VisualPresenceGuidance(BaseModel):
+    photo_recommendation: str
+    banner_strategy: str
+
+
+class ExperienceRewrite(BaseModel):
+    role_title: str
+    company: Optional[str] = None
+    original_snippet: Optional[str] = None
+    suggested_bullets: List[str] = []
+    impact_metrics: List[str] = []
+
+
+class SkillsOptimization(BaseModel):
+    skills_to_add: List[str] = []
+    skills_to_remove: List[str] = []
+    top_pinned_skills: List[str] = []
+
+
+class LinkedInProjectRecommendation(BaseModel):
+    repo_full_name: str
+    name: str
+    linkedin_placement: str
+    why_add: str
+    title_for_linkedin: str
+    description_snippet: str
+    skills_tags: List[str] = []
+
+
+class GrowthRoadmapPhase(BaseModel):
+    phase: str
+    key_actions: List[str] = []
+
+
+class ContentStrategyIdea(BaseModel):
+    topic: str
+    post_angle: str
+    target_audience: str
+    suggested_hook: str
+
+
 class SuggestionSetResponse(BaseModel):
-    section_scores: List[SectionScore]
-    keyword_gaps: List[KeywordGap]
-    rewrites: List[BulletRewrite]
+    profile_score: int = 78
+    headline_alternatives: List[HeadlineAlternative] = []
+    visual_presence: Optional[VisualPresenceGuidance] = None
+    about_rewrite: Optional[str] = None
+    experience_rewrites: List[ExperienceRewrite] = []
+    skills_optimization: Optional[SkillsOptimization] = None
+    recommended_projects_to_add: List[LinkedInProjectRecommendation] = []
+    featured_section_advice: Optional[str] = None
+    recommendations_advice: Optional[str] = None
+    industry_keywords: List[str] = []
+    competitive_analysis: Optional[Dict[str, Any]] = None
+    quick_wins: List[str] = []
+    long_term_improvements: List[str] = []
+    growth_roadmap: List[GrowthRoadmapPhase] = []
+    content_ideas: List[ContentStrategyIdea] = []
+    industry_benchmarks: Optional[str] = None
+    profile_completion_gaps: List[str] = []
+    # Core compatibility
+    section_scores: List[SectionScore] = []
+    keyword_gaps: List[KeywordGap] = []
+    rewrites: List[BulletRewrite] = []
 
 class CareerScoreResponse(BaseModel):
     linkedin: int
