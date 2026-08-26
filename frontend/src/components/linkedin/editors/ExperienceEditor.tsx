@@ -1,21 +1,25 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import {
   Briefcase,
   Plus,
   Trash2,
-  Calendar,
-  Building2,
   MapPin,
-  ListPlus,
-  X,
+  ChevronDown,
+  ChevronUp,
+  Edit2,
+  Check,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-interface Position {
+export interface PositionItem {
+  id?: string;
   title: string;
   company: string;
   location?: string;
+  start_date?: string;
+  end_date?: string;
   started_on?: string;
   ended_on?: string;
   description?: string;
@@ -31,8 +35,7 @@ export function ExperienceEditor({
   onChange: (updated: any) => void;
   isEditing: boolean;
 }) {
-  // Normalize content into an array of positions
-  const getPositions = (): Position[] => {
+  const getPositions = (): PositionItem[] => {
     if (Array.isArray(content)) return content;
     if (content?.positions && Array.isArray(content.positions)) return content.positions;
     if (content?.title || content?.company) return [content];
@@ -40,35 +43,52 @@ export function ExperienceEditor({
   };
 
   const positions = getPositions();
+  const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({ 0: true });
+  const [editingItemIdx, setEditingItemIdx] = useState<number | null>(null);
 
-  const handleUpdatePosition = (idx: number, updated: Position) => {
+  const toggleUnwrap = (idx: number) => {
+    setExpandedIds((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
+  };
+
+  const handleUpdatePosition = (idx: number, updated: PositionItem) => {
     const next = [...positions];
     next[idx] = updated;
-    onChange({ ...content, positions: next });
+    if (Array.isArray(content)) onChange(next);
+    else onChange({ ...content, positions: next });
   };
 
   const handleAddPosition = () => {
-    const newPos: Position = {
+    const newPos: PositionItem = {
       title: 'Senior Engineer',
       company: 'Tech Company',
       location: 'Remote',
-      started_on: '2023',
-      ended_on: 'Present',
-      description: '',
-      bullets: ['Spearheaded development of high-throughput AI services, increasing pipeline speed by 40%.'],
+      start_date: '2023',
+      end_date: 'Present',
+      description: 'Architected distributed backend pipelines and AI orchestration layers.',
+      bullets: ['Spearheaded development of high-throughput AI services, reducing latency by 40%.'],
     };
-    onChange({ ...content, positions: [newPos, ...positions] });
+    const next = [newPos, ...positions];
+    if (Array.isArray(content)) onChange(next);
+    else onChange({ ...content, positions: next });
+    setExpandedIds((prev) => ({ ...prev, 0: true }));
+    setEditingItemIdx(0);
   };
 
-  const handleRemovePosition = (idx: number) => {
+  const handleRemovePosition = (idx: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const next = positions.filter((_, i) => i !== idx);
-    onChange({ ...content, positions: next });
+    if (Array.isArray(content)) onChange(next);
+    else onChange({ ...content, positions: next });
+    if (editingItemIdx === idx) setEditingItemIdx(null);
   };
 
   const handleAddBullet = (posIdx: number) => {
     const pos = positions[posIdx];
     const currentBullets = pos.bullets || (pos.description ? [pos.description] : []);
-    const updatedBullets = [...currentBullets, 'Architected scalable cloud backend and automated CI/CD deployment pipelines.'];
+    const updatedBullets = [...currentBullets, 'Spearheaded technical initiatives improving scalability by 35%.'];
     handleUpdatePosition(posIdx, { ...pos, bullets: updatedBullets });
   };
 
@@ -85,194 +105,245 @@ export function ExperienceEditor({
     handleUpdatePosition(posIdx, { ...pos, bullets: currentBullets });
   };
 
+  if (positions.length === 0 && !isEditing) {
+    return (
+      <div className="p-6 rounded-2xl bg-slate-950/40 border border-border/40 text-center text-xs text-muted-foreground italic">
+        No work experience positions found.
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      {isEditing && (
-        <div className="flex justify-end">
+    <div className="space-y-3">
+      {/* Sub-toolbar */}
+      <div className="flex items-center justify-between pb-1">
+        <span className="text-xs text-muted-foreground">
+          {positions.length} {positions.length === 1 ? 'Role' : 'Roles'} in Career Timeline
+        </span>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const allOpen = positions.every((_, i) => expandedIds[i]);
+              const nextState: Record<number, boolean> = {};
+              positions.forEach((_, i) => {
+                nextState[i] = !allOpen;
+              });
+              setExpandedIds(nextState);
+            }}
+            className="text-[11px] text-muted-foreground hover:text-foreground font-medium px-2 py-0.5 rounded-lg hover:bg-white/5 transition-colors"
+          >
+            {positions.every((_, i) => expandedIds[i]) ? 'Collapse All' : 'Unwrap All'}
+          </button>
+
           <Button
-            size="sm"
+            size="xs"
             onClick={handleAddPosition}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs gap-1.5"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs gap-1 h-7"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Position
           </Button>
         </div>
-      )}
+      </div>
 
-      {positions.length === 0 && (
-        <div className="p-6 text-center text-muted-foreground bg-slate-950/40 rounded-2xl border border-dashed text-xs">
-          No structured positions found in this section. Click Edit to add your career experience.
-        </div>
-      )}
-
-      <div className="space-y-4">
-        {positions.map((pos, pIdx) => {
+      {/* Sub-sections List: Each position is an unwrappable item */}
+      <div className="space-y-2.5">
+        {positions.map((pos, idx) => {
+          const isExpanded = expandedIds[idx] ?? false;
+          const isItemEditing = isEditing || editingItemIdx === idx;
+          const roleTitle = pos.title || 'Untitled Role';
+          const companyName = pos.company || 'Company';
+          const dates = (pos.start_date || pos.started_on || pos.end_date || pos.ended_on)
+            ? `${pos.start_date || pos.started_on || ''} ${pos.end_date || pos.ended_on ? `– ${pos.end_date || pos.ended_on}` : ''}`
+            : '';
           const bullets = pos.bullets || (pos.description ? [pos.description] : []);
 
           return (
             <div
-              key={pIdx}
-              className="p-4 rounded-2xl bg-slate-950/70 border border-border/40 space-y-3.5 shadow-md transition-all hover:border-indigo-500/30"
+              key={idx}
+              className={cn(
+                'rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm',
+                isExpanded
+                  ? 'bg-slate-900/90 border-emerald-500/30'
+                  : 'bg-slate-950/60 border-border/40 hover:border-border/70'
+              )}
             >
-              {isEditing ? (
-                /* Editable Position Card */
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-indigo-400 uppercase font-mono">
-                      Role #{pIdx + 1}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => handleRemovePosition(pIdx)}
-                      className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 h-6 px-2"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />
-                      Remove
-                    </Button>
+              {/* Unwrappable Position Header */}
+              <div
+                onClick={() => toggleUnwrap(idx)}
+                className="p-3 sm:p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none bg-slate-900/40 hover:bg-slate-800/40 transition-colors"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                    <Briefcase className="h-4 w-4" />
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                        Job Title
-                      </label>
-                      <Input
-                        value={pos.title || ''}
-                        onChange={(e) => handleUpdatePosition(pIdx, { ...pos, title: e.target.value })}
-                        placeholder="e.g. Lead AI Systems Engineer"
-                        className="h-8 text-xs bg-slate-900"
-                      />
+                  <div className="min-w-0 flex-1">
+                    <h5 className="font-semibold text-xs sm:text-sm text-foreground truncate">
+                      {roleTitle}
+                    </h5>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-0.5">
+                      <span className="truncate text-emerald-300 font-medium">{companyName}</span>
+                      {dates && (
+                        <>
+                          <span className="text-border">•</span>
+                          <span className="font-mono text-[10px]">{dates}</span>
+                        </>
+                      )}
                     </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                        Company Name
-                      </label>
-                      <Input
-                        value={pos.company || ''}
-                        onChange={(e) => handleUpdatePosition(pIdx, { ...pos, company: e.target.value })}
-                        placeholder="e.g. Acme Corp"
-                        className="h-8 text-xs bg-slate-900"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                        Start Date
-                      </label>
-                      <Input
-                        value={pos.started_on || ''}
-                        onChange={(e) => handleUpdatePosition(pIdx, { ...pos, started_on: e.target.value })}
-                        placeholder="e.g. Jan 2022"
-                        className="h-8 text-xs bg-slate-900"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                        End Date
-                      </label>
-                      <Input
-                        value={pos.ended_on || ''}
-                        onChange={(e) => handleUpdatePosition(pIdx, { ...pos, ended_on: e.target.value })}
-                        placeholder="e.g. Present"
-                        className="h-8 text-xs bg-slate-900"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                        Location
-                      </label>
-                      <Input
-                        value={pos.location || ''}
-                        onChange={(e) => handleUpdatePosition(pIdx, { ...pos, location: e.target.value })}
-                        placeholder="e.g. San Francisco, CA"
-                        className="h-8 text-xs bg-slate-900"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Bullet Points Management */}
-                  <div className="space-y-2 pt-2 border-t border-border/30">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-foreground">
-                        Achievement Bullet Points ({bullets.length})
-                      </span>
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        onClick={() => handleAddBullet(pIdx)}
-                        className="h-6 text-[10px] gap-1 border-indigo-500/30 text-indigo-300"
-                      >
-                        <ListPlus className="h-3 w-3" />
-                        Add Bullet
-                      </Button>
-                    </div>
-
-                    {bullets.map((bullet, bIdx) => (
-                      <div key={bIdx} className="flex items-start gap-2">
-                        <span className="text-indigo-400 text-xs mt-2">•</span>
-                        <textarea
-                          value={bullet}
-                          onChange={(e) => handleUpdateBullet(pIdx, bIdx, e.target.value)}
-                          className="flex-1 p-2 rounded-lg border border-border/40 bg-slate-900 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none h-16"
-                        />
-                        <button
-                          onClick={() => handleRemoveBullet(pIdx, bIdx)}
-                          className="text-muted-foreground hover:text-rose-400 p-1 mt-1 rounded-md"
-                          title="Remove bullet"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
                   </div>
                 </div>
-              ) : (
-                /* Read-Only Position View */
-                <div className="space-y-2.5">
-                  <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border/30 pb-2">
-                    <div>
-                      <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                        <Briefcase className="h-4 w-4 text-indigo-400" />
-                        {pos.title || 'Role'}
-                      </h4>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                        <span className="font-semibold text-foreground/80 flex items-center gap-1">
-                          <Building2 className="h-3 w-3 text-muted-foreground/70" />
-                          {pos.company || 'Company'}
-                        </span>
-                        {pos.location && (
-                          <span className="flex items-center gap-1">
-                            • <MapPin className="h-3 w-3 text-muted-foreground/70" />
-                            {pos.location}
-                          </span>
-                        )}
+
+                {/* Header Actions */}
+                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => {
+                      if (!isExpanded) toggleUnwrap(idx);
+                      setEditingItemIdx(editingItemIdx === idx ? null : idx);
+                    }}
+                    className="p-1 text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-lg transition-colors"
+                    title={isItemEditing ? 'Done Editing' : 'Edit Position'}
+                  >
+                    {isItemEditing ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Edit2 className="h-3.5 w-3.5" />}
+                  </button>
+
+                  <button
+                    onClick={(e) => handleRemovePosition(idx, e)}
+                    className="p-1 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                    title="Remove Position"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+
+                  <button
+                    onClick={() => toggleUnwrap(idx)}
+                    className="p-1 text-muted-foreground hover:text-foreground transition-colors ml-0.5"
+                    aria-label={isExpanded ? 'Collapse' : 'Unwrap'}
+                  >
+                    {isExpanded ? (
+                      <ChevronUp className="h-4 w-4 text-emerald-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Unwrapped Position Details & Bullets */}
+              {isExpanded && (
+                <div className="p-4 border-t border-border/30 bg-slate-950/40 animate-fade-in space-y-3">
+                  {isItemEditing ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                            Role / Job Title
+                          </label>
+                          <Input
+                            value={pos.title || ''}
+                            onChange={(e) => handleUpdatePosition(idx, { ...pos, title: e.target.value })}
+                            placeholder="e.g. Senior Software Engineer"
+                            className="font-bold text-xs bg-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                            Company Name
+                          </label>
+                          <Input
+                            value={pos.company || ''}
+                            onChange={(e) => handleUpdatePosition(idx, { ...pos, company: e.target.value })}
+                            placeholder="e.g. Google / Microsoft"
+                            className="text-xs bg-slate-900"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                            Timeline / Dates
+                          </label>
+                          <Input
+                            value={dates}
+                            onChange={(e) => handleUpdatePosition(idx, { ...pos, start_date: e.target.value, end_date: '' })}
+                            placeholder="e.g. 2023 – Present"
+                            className="text-xs bg-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                            Location
+                          </label>
+                          <Input
+                            value={pos.location || ''}
+                            onChange={(e) => handleUpdatePosition(idx, { ...pos, location: e.target.value })}
+                            placeholder="e.g. San Francisco, CA (Hybrid)"
+                            className="text-xs bg-slate-900"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Editable Accomplishment Bullets */}
+                      <div className="space-y-2 pt-2 border-t border-border/20">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-semibold text-muted-foreground">
+                            Quantified Accomplishment Bullets
+                          </label>
+                          <button
+                            onClick={() => handleAddBullet(idx)}
+                            className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add Bullet
+                          </button>
+                        </div>
+
+                        {bullets.map((bullet, bIdx) => (
+                          <div key={bIdx} className="flex items-start gap-2">
+                            <textarea
+                              rows={2}
+                              value={bullet}
+                              onChange={(e) => handleUpdateBullet(idx, bIdx, e.target.value)}
+                              placeholder="Action Verb + Task + Impact / Metric..."
+                              className="w-full p-2 text-xs font-sans rounded-xl border border-border/40 bg-slate-900 text-foreground resize-y leading-relaxed"
+                            />
+                            <button
+                              onClick={() => handleRemoveBullet(idx, bIdx)}
+                              className="p-1 text-muted-foreground hover:text-rose-400 mt-1"
+                              title="Delete Bullet"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
+                  ) : (
+                    <div className="space-y-2.5 text-xs">
+                      {pos.location && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
+                          <MapPin className="h-3 w-3 text-muted-foreground/70" />
+                          <span>{pos.location}</span>
+                        </div>
+                      )}
 
-                    {(pos.started_on || pos.ended_on) && (
-                      <Badge variant="outline" className="text-[10px] font-mono flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {pos.started_on || 'Start'} — {pos.ended_on || 'Present'}
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Bullet points rendering */}
-                  <ul className="space-y-1.5 text-xs text-foreground/90 pl-1">
-                    {bullets.map((b, i) => (
-                      <li key={i} className="flex items-start gap-2 leading-relaxed">
-                        <span className="text-indigo-400 font-bold">•</span>
-                        <span>{b}</span>
-                      </li>
-                    ))}
-                  </ul>
+                      {bullets.length > 0 ? (
+                        <ul className="space-y-1.5 pt-1">
+                          {bullets.map((b, bIdx) => (
+                            <li key={bIdx} className="flex items-start gap-2 text-foreground/90 leading-relaxed font-sans">
+                              <span className="text-emerald-400 mt-1 shrink-0">•</span>
+                              <span>{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground italic">
+                          No bullet points added. Click Edit to add accomplishments.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

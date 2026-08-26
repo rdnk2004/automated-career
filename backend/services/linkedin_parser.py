@@ -178,6 +178,7 @@ def parse_zip(zip_bytes: bytes) -> Dict[str, Any]:
 def to_profile_sections(parsed: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Convert the parsed dictionary into a list of section dicts ready for DB insert.
+    Consolidates items by category (e.g. all certifications in one certifications section).
     """
     sections = []
     
@@ -187,34 +188,48 @@ def to_profile_sections(parsed: Dict[str, Any]) -> List[Dict[str, Any]]:
             sections.append({
                 "section_type": "headline",
                 "title": "Headline",
-                "content": {"text": prof["headline"]}
+                "content": {
+                    "headline": prof["headline"],
+                    "location": prof.get("location", ""),
+                    "linkedin_url": prof.get("linkedin_url", "")
+                }
             })
         if prof.get("summary"):
             sections.append({
                 "section_type": "about",
                 "title": "Summary",
-                "content": {"text": prof["summary"]}
+                "content": {
+                    "summary": prof["summary"],
+                    "text": prof["summary"]
+                }
             })
             
-    for idx, pos in enumerate(parsed.get("positions", [])):
+    if parsed.get("positions"):
         sections.append({
             "section_type": "experience",
-            "title": pos.get("title", f"Experience {idx+1}"),
-            "content": pos
+            "title": "Work Experience",
+            "content": {"positions": parsed["positions"]}
         })
         
-    for idx, edu in enumerate(parsed.get("education", [])):
+    if parsed.get("education"):
         sections.append({
             "section_type": "education",
-            "title": edu.get("degree") or edu.get("school") or f"Education {idx+1}",
-            "content": edu
+            "title": "Education",
+            "content": {"education": parsed["education"]}
         })
 
-    for idx, proj in enumerate(parsed.get("projects", [])):
+    if parsed.get("certifications"):
+        sections.append({
+            "section_type": "certifications",
+            "title": "Certifications & Licenses",
+            "content": {"certifications": parsed["certifications"]}
+        })
+
+    if parsed.get("projects"):
         sections.append({
             "section_type": "projects",
-            "title": proj.get("title", f"Project {idx+1}"),
-            "content": proj
+            "title": "Projects",
+            "content": {"projects": parsed["projects"]}
         })
         
     if parsed.get("skills"):
@@ -223,33 +238,26 @@ def to_profile_sections(parsed: Dict[str, Any]) -> List[Dict[str, Any]]:
             "title": "Skills",
             "content": {"skills": parsed["skills"]}
         })
-        
-    for idx, cert in enumerate(parsed.get("certifications", [])):
-        sections.append({
-            "section_type": "certifications",
-            "title": cert.get("name", f"Certification {idx+1}"),
-            "content": cert
-        })
 
-    for idx, vol in enumerate(parsed.get("volunteer", [])):
+    if parsed.get("volunteer"):
         sections.append({
             "section_type": "volunteer",
-            "title": vol.get("role") or vol.get("organization") or f"Volunteer {idx+1}",
-            "content": vol
+            "title": "Volunteering Experience",
+            "content": {"volunteer": parsed["volunteer"]}
         })
 
-    for idx, award in enumerate(parsed.get("honors", [])):
+    if parsed.get("honors"):
         sections.append({
             "section_type": "awards",
-            "title": award.get("title", f"Award {idx+1}"),
-            "content": award
+            "title": "Honors & Awards",
+            "content": {"awards": parsed["honors"]}
         })
 
-    for idx, lang in enumerate(parsed.get("languages", [])):
+    if parsed.get("languages"):
         sections.append({
             "section_type": "languages",
-            "title": lang.get("name", f"Language {idx+1}"),
-            "content": lang
+            "title": "Languages",
+            "content": {"languages": parsed["languages"]}
         })
         
     return sections

@@ -1,13 +1,26 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { GraduationCap, Plus, Trash2, Calendar, Building2 } from 'lucide-react';
+import {
+  GraduationCap,
+  Plus,
+  Trash2,
+  Building2,
+  ChevronDown,
+  ChevronUp,
+  Edit2,
+  Check,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-interface EducationItem {
+export interface EducationItem {
   degree?: string;
   school?: string;
+  start_date?: string;
+  end_date?: string;
   started_on?: string;
   ended_on?: string;
+  field?: string;
   notes?: string;
 }
 
@@ -28,156 +41,242 @@ export function EducationEditor({
   };
 
   const items = getItems();
+  const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({ 0: true });
+  const [editingItemIdx, setEditingItemIdx] = useState<number | null>(null);
+
+  const toggleUnwrap = (idx: number) => {
+    setExpandedIds((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
+  };
 
   const handleUpdate = (idx: number, updated: EducationItem) => {
     const next = [...items];
     next[idx] = updated;
-    onChange({ ...content, education: next });
+    if (Array.isArray(content)) onChange(next);
+    else onChange({ ...content, education: next });
   };
 
   const handleAdd = () => {
     const newItem: EducationItem = {
       degree: 'B.S. in Computer Science',
-      school: 'University',
-      started_on: '2018',
-      ended_on: '2022',
-      notes: 'Focus on Distributed Systems and Machine Learning',
+      school: 'University Name',
+      start_date: '2020',
+      end_date: '2024',
+      notes: 'Focus on Artificial Intelligence & Software Systems',
     };
-    onChange({ ...content, education: [newItem, ...items] });
+    const next = [newItem, ...items];
+    if (Array.isArray(content)) onChange(next);
+    else onChange({ ...content, education: next });
+    setExpandedIds((prev) => ({ ...prev, 0: true }));
+    setEditingItemIdx(0);
   };
 
-  const handleRemove = (idx: number) => {
+  const handleRemove = (idx: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const next = items.filter((_, i) => i !== idx);
-    onChange({ ...content, education: next });
+    if (Array.isArray(content)) onChange(next);
+    else onChange({ ...content, education: next });
+    if (editingItemIdx === idx) setEditingItemIdx(null);
   };
+
+  if (items.length === 0 && !isEditing) {
+    return (
+      <div className="p-6 rounded-2xl bg-slate-950/40 border border-border/40 text-center text-xs text-muted-foreground italic">
+        No academic education listed.
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      {isEditing && (
-        <div className="flex justify-end">
+    <div className="space-y-3">
+      {/* Sub-toolbar */}
+      <div className="flex items-center justify-between pb-1">
+        <span className="text-xs text-muted-foreground">
+          {items.length} {items.length === 1 ? 'Degree / Program' : 'Degrees / Programs'}
+        </span>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const allOpen = items.every((_, i) => expandedIds[i]);
+              const nextState: Record<number, boolean> = {};
+              items.forEach((_, i) => {
+                nextState[i] = !allOpen;
+              });
+              setExpandedIds(nextState);
+            }}
+            className="text-[11px] text-muted-foreground hover:text-foreground font-medium px-2 py-0.5 rounded-lg hover:bg-white/5 transition-colors"
+          >
+            {items.every((_, i) => expandedIds[i]) ? 'Collapse All' : 'Unwrap All'}
+          </button>
+
           <Button
-            size="sm"
+            size="xs"
             onClick={handleAdd}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs gap-1.5"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs gap-1 h-7"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Education
           </Button>
         </div>
-      )}
+      </div>
 
-      {items.length === 0 && (
-        <div className="p-6 text-center text-muted-foreground bg-slate-950/40 rounded-2xl border border-dashed text-xs">
-          No education entries found. Click Edit to add your academic degrees or certifications.
-        </div>
-      )}
+      {/* Sub-sections List */}
+      <div className="space-y-2.5">
+        {items.map((item, idx) => {
+          const isExpanded = expandedIds[idx] ?? false;
+          const isItemEditing = isEditing || editingItemIdx === idx;
+          const degreeTitle = item.degree || item.field || 'Degree / Certificate';
+          const schoolName = item.school || 'University / Institution';
+          const dates = (item.start_date || item.started_on || item.end_date || item.ended_on)
+            ? `${item.start_date || item.started_on || ''} ${item.end_date || item.ended_on ? `– ${item.end_date || item.ended_on}` : ''}`
+            : '';
 
-      <div className="space-y-3">
-        {items.map((item, idx) => (
-          <div
-            key={idx}
-            className="p-4 rounded-2xl bg-slate-950/70 border border-border/40 space-y-3 shadow-md"
-          >
-            {isEditing ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-indigo-400 font-mono">
-                    Entry #{idx + 1}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => handleRemove(idx)}
-                    className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 h-6 px-2"
+          return (
+            <div
+              key={idx}
+              className={cn(
+                'rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm',
+                isExpanded
+                  ? 'bg-slate-900/90 border-blue-500/30'
+                  : 'bg-slate-950/60 border-border/40 hover:border-border/70'
+              )}
+            >
+              {/* Unwrappable Degree Header */}
+              <div
+                onClick={() => toggleUnwrap(idx)}
+                className="p-3 sm:p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none bg-slate-900/40 hover:bg-slate-800/40 transition-colors"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                    <GraduationCap className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h5 className="font-semibold text-xs sm:text-sm text-foreground truncate">
+                      {degreeTitle}
+                    </h5>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-0.5">
+                      <span className="truncate text-blue-300 font-medium">{schoolName}</span>
+                      {dates && (
+                        <>
+                          <span className="text-border">•</span>
+                          <span className="font-mono text-[10px]">{dates}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Header Actions */}
+                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => {
+                      if (!isExpanded) toggleUnwrap(idx);
+                      setEditingItemIdx(editingItemIdx === idx ? null : idx);
+                    }}
+                    className="p-1 text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-lg transition-colors"
+                    title={isItemEditing ? 'Done Editing' : 'Edit Entry'}
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Remove
-                  </Button>
-                </div>
+                    {isItemEditing ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Edit2 className="h-3.5 w-3.5" />}
+                  </button>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                      Degree / Certificate
-                    </label>
-                    <Input
-                      value={item.degree || ''}
-                      onChange={(e) => handleUpdate(idx, { ...item, degree: e.target.value })}
-                      placeholder="e.g. B.S. in Computer Science"
-                      className="h-8 text-xs bg-slate-900"
-                    />
-                  </div>
+                  <button
+                    onClick={(e) => handleRemove(idx, e)}
+                    className="p-1 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                    title="Remove Entry"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                      Institution / School
-                    </label>
-                    <Input
-                      value={item.school || ''}
-                      onChange={(e) => handleUpdate(idx, { ...item, school: e.target.value })}
-                      placeholder="e.g. Stanford University"
-                      className="h-8 text-xs bg-slate-900"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                      Dates
-                    </label>
-                    <Input
-                      value={item.ended_on ? `${item.started_on || ''} - ${item.ended_on}` : item.started_on || ''}
-                      onChange={(e) => handleUpdate(idx, { ...item, ended_on: e.target.value })}
-                      placeholder="e.g. 2018 - 2022"
-                      className="h-8 text-xs bg-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                      Honors / Specialization
-                    </label>
-                    <Input
-                      value={item.notes || ''}
-                      onChange={(e) => handleUpdate(idx, { ...item, notes: e.target.value })}
-                      placeholder="e.g. Magna Cum Laude • AI Honors"
-                      className="h-8 text-xs bg-slate-900"
-                    />
-                  </div>
+                  <button
+                    onClick={() => toggleUnwrap(idx)}
+                    className="p-1 text-muted-foreground hover:text-foreground transition-colors ml-0.5"
+                    aria-label={isExpanded ? 'Collapse' : 'Unwrap'}
+                  >
+                    {isExpanded ? (
+                      <ChevronUp className="h-4 w-4 text-blue-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-1.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                      <GraduationCap className="h-4 w-4 text-indigo-400" />
-                      {item.degree || 'Degree'}
-                    </h4>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 font-medium">
-                      <Building2 className="h-3 w-3 text-muted-foreground/70" />
-                      {item.school || 'Institution'}
-                    </p>
-                  </div>
 
-                  {(item.started_on || item.ended_on) && (
-                    <Badge variant="outline" className="text-[10px] font-mono flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {item.started_on} {item.ended_on ? `— ${item.ended_on}` : ''}
-                    </Badge>
+              {/* Unwrapped Education Details */}
+              {isExpanded && (
+                <div className="p-4 border-t border-border/30 bg-slate-950/40 animate-fade-in space-y-3">
+                  {isItemEditing ? (
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                            Degree Name / Qualification
+                          </label>
+                          <Input
+                            value={item.degree || ''}
+                            onChange={(e) => handleUpdate(idx, { ...item, degree: e.target.value })}
+                            placeholder="e.g. B.S. in Computer Science"
+                            className="font-bold text-xs bg-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                            University / School Name
+                          </label>
+                          <Input
+                            value={item.school || ''}
+                            onChange={(e) => handleUpdate(idx, { ...item, school: e.target.value })}
+                            placeholder="e.g. Stanford University"
+                            className="text-xs bg-slate-900"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                            Start Date – End Date
+                          </label>
+                          <Input
+                            value={dates}
+                            onChange={(e) => handleUpdate(idx, { ...item, start_date: e.target.value, end_date: '' })}
+                            placeholder="e.g. 2020 – 2024"
+                            className="text-xs bg-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                            Field of Study / Specialization
+                          </label>
+                          <Input
+                            value={item.field || item.notes || ''}
+                            onChange={(e) => handleUpdate(idx, { ...item, field: e.target.value, notes: e.target.value })}
+                            placeholder="e.g. Distributed AI Systems"
+                            className="text-xs bg-slate-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground/70" />
+                        <span>{schoolName}</span>
+                      </div>
+                      {(item.field || item.notes) && (
+                        <p className="text-xs text-foreground/85 leading-relaxed pt-1">
+                          {item.field || item.notes}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
-
-                {item.notes && (
-                  <p className="text-xs text-foreground/80 pt-1 leading-relaxed">
-                    {item.notes}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
