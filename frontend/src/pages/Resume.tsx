@@ -163,82 +163,89 @@ export default function Resume() {
           onSelectRole={(role) => setActiveTitle(role)}
         />
 
-        {/* Dual-Column Interactive Studio */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column (5 Cols): Active Resume Editor, Project Recommendations, JD Heatmap */}
-          <div className="lg:col-span-5 space-y-6">
-            {/* Live Resume Editor Card */}
-            <Card className="glass-card border-border/40 shadow-xl rounded-2xl overflow-hidden">
-              <CardHeader className="pb-3 border-b border-border/30 bg-secondary/30">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-bold font-heading text-foreground flex items-center gap-2">
-                    <div className="p-1.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm">
-                      <FileText className="h-4 w-4" />
+        {/* Dual-Column Interactive Studio (Active when >= 1 resume in vault) */}
+        {activeResume ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column (5 Cols): Active Resume Editor, Project Recommendations, JD Heatmap */}
+            <div className="lg:col-span-5 space-y-6">
+              {/* Live Resume Editor Card */}
+              <Card className="glass-card border-border/40 shadow-xl rounded-2xl overflow-hidden">
+                <CardHeader className="pb-3 border-b border-border/30 bg-secondary/30">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-bold font-heading text-foreground flex items-center gap-2">
+                      <div className="p-1.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      {activeResume?.title || 'Resume Content'}
+                    </CardTitle>
+
+                    <div className="flex items-center gap-2">
+                      {hasUnsavedChanges && (
+                        <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/30">
+                          Unsaved Edits
+                        </Badge>
+                      )}
+                      <Button
+                        size="xs"
+                        onClick={handleSaveText}
+                        disabled={!hasUnsavedChanges || isUpdating}
+                        className="h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold gap-1"
+                      >
+                        <Save className="h-3 w-3" />
+                        {isUpdating ? 'Saving...' : 'Save'}
+                      </Button>
                     </div>
-                    {activeResume?.title || 'Resume Content'}
-                  </CardTitle>
-
-                  <div className="flex items-center gap-2">
-                    {hasUnsavedChanges && (
-                      <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/30">
-                        Unsaved Edits
-                      </Badge>
-                    )}
-                    <Button
-                      size="xs"
-                      onClick={handleSaveText}
-                      disabled={!hasUnsavedChanges || isUpdating}
-                      className="h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold gap-1"
-                    >
-                      <Save className="h-3 w-3" />
-                      {isUpdating ? 'Saving...' : 'Save'}
-                    </Button>
                   </div>
-                </div>
-              </CardHeader>
+                </CardHeader>
 
-              <CardContent className="p-4 space-y-3">
-                <textarea
-                  rows={14}
-                  value={editedText}
-                  onChange={(e) => handleTextChange(e.target.value)}
-                  placeholder="Paste or edit your resume text here..."
-                  className="w-full p-3.5 text-xs font-mono rounded-xl border border-border/40 bg-slate-950/80 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none shadow-inner leading-relaxed"
-                />
+                <CardContent className="p-4 space-y-3">
+                  <textarea
+                    rows={14}
+                    value={editedText}
+                    onChange={(e) => handleTextChange(e.target.value)}
+                    placeholder="Paste or edit your resume text here..."
+                    className="w-full p-3.5 text-xs font-mono rounded-xl border border-border/40 bg-slate-950/80 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none shadow-inner leading-relaxed"
+                  />
 
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono">
-                  <span>
-                    {wordCount} words • {editedText.length} chars
-                  </span>
-                  <span className="text-indigo-300">
-                    Target: {activeResume?.target_role || activeTitle}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono">
+                    <span>
+                      {wordCount} words • {editedText.length} chars
+                    </span>
+                    <span className="text-indigo-300">
+                      Target: {activeResume?.target_role || activeTitle}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
 
-            {/* Featured GitHub Project Recommendations */}
-            <ProjectRecommendations
-              projects={activeResume?.last_analysis?.recommended_projects}
-              targetRole={activeResume?.target_role || activeTitle}
-              onInsertBullets={handleInsertBullets}
-            />
+              {/* Featured GitHub Project Recommendations */}
+              <ProjectRecommendations
+                projects={activeResume?.last_analysis?.recommended_projects}
+                targetRole={activeResume?.target_role || activeTitle}
+                onInsertBullets={handleInsertBullets}
+              />
 
-            {/* Live Job Description Keyword Cloud & Skill Heatmap */}
+              {/* Live Job Description Keyword Cloud & Skill Heatmap */}
+              <JDKeywordCloud />
+              <GapHeatmap />
+            </div>
+
+            {/* Right Column (7 Cols): The Resume Destroyer Teardown & Reconstruction */}
+            <div className="lg:col-span-7 space-y-6">
+              <ResumeDestroyerCard
+                audit={activeResume?.last_analysis}
+                isLoading={isAnalyzing}
+                onAnalyze={handleRunDestroyer}
+                targetRole={activeResume?.target_role || activeTitle}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <JDKeywordCloud />
             <GapHeatmap />
           </div>
-
-          {/* Right Column (7 Cols): The Resume Destroyer Teardown & Reconstruction */}
-          <div className="lg:col-span-7 space-y-6">
-            <ResumeDestroyerCard
-              audit={activeResume?.last_analysis}
-              isLoading={isAnalyzing}
-              onAnalyze={handleRunDestroyer}
-              targetRole={activeResume?.target_role || activeTitle}
-            />
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

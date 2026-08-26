@@ -2,7 +2,7 @@ import json
 import logging
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Depends, Request, Query
+from fastapi import APIRouter, HTTPException, Depends, Request, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update
@@ -19,6 +19,7 @@ from schemas.analysis import (
     ResumeDestroyerResponse,
 )
 from agents.resume_agent import analyze as analyze_resume_agent
+from services.resume_parser_service import resume_parser_service
 from limiter import limiter
 
 logger = logging.getLogger("career_os")
@@ -67,6 +68,57 @@ async def create_resume(
         raw_text=req.raw_text.strip(),
         parsed_data=req.parsed_data,
         is_primary=bool(req.is_primary),
+    )
+    db.add(resume)
+    await db.commit()
+    await db.refresh(resume)
+    return resume
+
+
+@router.post("/upload", response_model=TargetedResumeResponse, status_code=201)
+@limiter.limit("10/minute")
+async def upload_resume(
+    request: Request,
+    file: UploadFile = File(...),
+    target_role: Optional[str] = Form(None),
+    title: Optional[str] = Form(None),
+    is_primary: Optional[bool] = Form(False),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Ingest binary PDF, extract layout-aware text, parse via Gemini, and store as a targeted resume.
+    """
+    filename = file.filename or "resume.pdf"
+    if not (filename.lower().endswith(".pdf") or filename.lower().endswith(".txt") or filename.lower().endswith(".md")):
+        raise HTTPException(status_code=400, detail="Only .pdf, .txt, and .md resume files are supported")
+
+    content = await file.read()
+    MAX_SIZE = 10 * 1024 * 1024  # 10MB
+    if len(content) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+
+    try:
+        parsed = await resume_parser_service.parse_resume(content, filename, target_role)
+    except Exception as e:
+        logger.error(f"Failed to parse resume {filename}: {e}")
+        raise HTTPException(status_code=500, detail=f"Resume parsing failed: {e}")
+
+    final_role = target_role.strip() if target_role and target_role.strip() else parsed.get("detected_role", "AI Engineer")
+    clean_title = title.strip() if title and title.strip() else f"{final_role} - {filename.replace('.pdf', '').replace('.txt', '').replace('.md', '')}"
+
+    if is_primary:
+        await db.execute(
+            update(TargetedResume)
+            .where(TargetedResume.target_role == final_role)
+            .values(is_primary=False)
+        )
+
+    resume = TargetedResume(
+        title=clean_title,
+        target_role=final_role,
+        raw_text=parsed.get("raw_text", "").strip(),
+        parsed_data=parsed,
+        is_primary=bool(is_primary),
     )
     db.add(resume)
     await db.commit()

@@ -42,4 +42,13 @@ export const resumeApi = {
     const res = await api.post(`/api/resumes/${id}/destroyer`);
     return res.data;
   },
+
+  uploadResume: async (formData: FormData): Promise<TargetedResume> => {
+    const res = await api.post('/api/resumes/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return res.data;
+  },
 };

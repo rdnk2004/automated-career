@@ -70,3 +70,14 @@ export const useAnalyzeWithDestroyer = () => {
     },
   });
 };
+
+export const useUploadResume = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (formData: FormData) => resumeApi.uploadResume(formData),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['targeted-resumes'] });
+      queryClient.invalidateQueries({ queryKey: ['targeted-resume', data.id] });
+    },
+  });
+};
